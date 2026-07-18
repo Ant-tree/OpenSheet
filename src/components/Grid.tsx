@@ -92,10 +92,11 @@ export default function Grid() {
     return { covered, anchorOf }
   }, [sheet.merges])
 
-  const startEditing = useCallback(
-    (row: number, col: number, initial?: string) => {
-      const raw = initial ?? useStore.getState().getRaw(row, col)
-      setEditBuffer(raw)
+  const composingRef = useRef(false)
+
+  const enterEdit = useCallback(
+    (row: number, col: number) => {
+      setEditBuffer(useStore.getState().getRaw(row, col))
       setEditing({ row, col })
     },
     [setEditing],
@@ -103,81 +104,103 @@ export default function Grid() {
 
   const commitEdit = useCallback(
     (move: 'down' | 'right' | 'none') => {
-      if (!editing) return
-      setCellContent(editing.row, editing.col, editBuffer)
+      const ed = useStore.getState().editing
+      if (!ed) return
+      setCellContent(ed.row, ed.col, editBuffer)
       setEditing(null)
+      setEditBuffer('')
       if (move === 'down') moveSelection(1, 0, false)
       else if (move === 'right') moveSelection(0, 1, false)
     },
-    [editing, editBuffer, setCellContent, setEditing, moveSelection],
+    [editBuffer, setCellContent, setEditing, moveSelection],
   )
 
+  const cancelEdit = useCallback(() => {
+    setEditing(null)
+    setEditBuffer('')
+  }, [setEditing])
+
+  // The active cell always hosts a focused input — even when not editing — so it
+  // captures the first keystroke, including IME composition (Korean). Starting
+  // an edit from a keydown on a non-editable element breaks that composition.
   useLayoutEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus()
-      const len = inputRef.current.value.length
-      inputRef.current.setSelectionRange(len, len)
+    const el = inputRef.current
+    if (!el) return
+    el.focus({ preventScroll: true })
+    if (editing) {
+      const len = el.value.length
+      el.setSelectionRange(len, len)
     }
-  }, [editing])
+  }, [editing, selection.focus.row, selection.focus.col])
 
-  // Keep keyboard focus on the grid container (which owns arrow-key navigation)
-  // whenever we're not editing a cell — on mount and after an edit finishes.
-  useEffect(() => {
-    if (!editing) scrollRef.current?.focus({ preventScroll: true })
-  }, [editing])
+  // ----- keyboard handling on the active-cell input -----
+  // Typing when not editing flows into onChange (which starts the edit), so the
+  // browser/IME inserts the character naturally — no duplication, IME-safe.
+  const onEditorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!useStore.getState().editing) {
+      setEditing({ row: selection.focus.row, col: selection.focus.col })
+    }
+    setEditBuffer(e.target.value)
+  }
 
-  // ----- keyboard navigation on the grid container -----
-  const onKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (editing) return // the input handles its own keys
-      const { key: k } = e
-      if (k === 'ArrowUp') {
+  const onEditorKeyDown = (e: React.KeyboardEvent) => {
+    if (composingRef.current || e.nativeEvent.isComposing) return // don't disturb IME
+    const isEditing = !!useStore.getState().editing
+    const k = e.key
+    if (isEditing) {
+      if (k === 'Enter') {
         e.preventDefault()
-        moveSelection(-1, 0, e.shiftKey)
-      } else if (k === 'ArrowDown') {
+        commitEdit('down')
+      } else if (k === 'Tab') {
         e.preventDefault()
-        moveSelection(1, 0, e.shiftKey)
-      } else if (k === 'ArrowLeft') {
+        commitEdit('right')
+      } else if (k === 'Escape') {
         e.preventDefault()
-        moveSelection(0, -1, e.shiftKey)
-      } else if (k === 'ArrowRight' || k === 'Tab') {
-        e.preventDefault()
-        moveSelection(0, k === 'Tab' && e.shiftKey ? -1 : 1, k === 'Tab' ? false : e.shiftKey)
-      } else if (k === 'Enter') {
-        e.preventDefault()
-        startEditing(selection.focus.row, selection.focus.col)
-      } else if (k === 'F2') {
-        e.preventDefault()
-        startEditing(selection.focus.row, selection.focus.col)
-      } else if (k === 'Delete' || k === 'Backspace') {
-        e.preventDefault()
-        clearSelectedContents()
-      } else if (k.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        // Printable character starts editing, replacing the cell. preventDefault
-        // so the browser doesn't ALSO type this key into the freshly-focused
-        // input (which would duplicate the first character, e.g. "4000"→"44000").
-        e.preventDefault()
-        startEditing(selection.focus.row, selection.focus.col, k)
+        cancelEdit()
       }
-    },
-    [editing, moveSelection, startEditing, selection, clearSelectedContents],
-  )
-
-  const onInputKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      commitEdit('down')
-    } else if (e.key === 'Tab') {
-      e.preventDefault()
-      commitEdit('right')
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      setEditing(null)
+      return // arrows etc. move the text caret while editing
     }
+    // Navigation mode (input is empty; printable keys fall through to onChange).
+    if (k === 'ArrowUp') {
+      e.preventDefault()
+      moveSelection(-1, 0, e.shiftKey)
+    } else if (k === 'ArrowDown') {
+      e.preventDefault()
+      moveSelection(1, 0, e.shiftKey)
+    } else if (k === 'ArrowLeft') {
+      e.preventDefault()
+      moveSelection(0, -1, e.shiftKey)
+    } else if (k === 'ArrowRight') {
+      e.preventDefault()
+      moveSelection(0, 1, e.shiftKey)
+    } else if (k === 'Tab') {
+      e.preventDefault()
+      moveSelection(0, e.shiftKey ? -1 : 1, false)
+    } else if (k === 'Enter' || k === 'F2') {
+      e.preventDefault()
+      enterEdit(selection.focus.row, selection.focus.col)
+    } else if (k === 'Delete' || k === 'Backspace') {
+      e.preventDefault()
+      clearSelectedContents()
+    }
+  }
+
+  const onCompositionStart = () => {
+    composingRef.current = true
+    if (!useStore.getState().editing) {
+      setEditing({ row: selection.focus.row, col: selection.focus.col })
+    }
+  }
+  const onCompositionEnd = () => {
+    composingRef.current = false
   }
 
   // ----- mouse selection -----
   const onCellMouseDown = (row: number, col: number, e: React.MouseEvent) => {
+    // Clicking a non-input target (a cell body) would move focus to <body> and
+    // steal it from the active-cell input that owns keyboard navigation. Prevent
+    // that; still allow caret placement when clicking inside the edit input.
+    if (!(e.target instanceof HTMLInputElement)) e.preventDefault()
     if (editing) commitEdit('none')
     if (e.shiftKey) {
       setSelection({ anchor: selection.anchor, focus: { row, col } })
@@ -185,8 +208,7 @@ export default function Grid() {
       setSelection({ anchor: { row, col }, focus: { row, col } })
     }
     dragging.current = true
-    // Ensure the grid keeps keyboard focus so arrow keys navigate.
-    scrollRef.current?.focus({ preventScroll: true })
+    // Focus follows the active cell's input via a layout effect on selection.
   }
   const onCellMouseEnter = (row: number, col: number) => {
     if (dragging.current) {
@@ -247,7 +269,7 @@ export default function Grid() {
   }, [selection.focus.row, selection.focus.col])
 
   return (
-    <div className="grid-scroll" ref={scrollRef} tabIndex={0} onKeyDown={onKeyDown}>
+    <div className="grid-scroll" ref={scrollRef}>
       <table className="grid" style={{ width: totalWidth }}>
         <colgroup>
           <col style={{ width: HEADER_WIDTH }} />
@@ -331,17 +353,22 @@ export default function Grid() {
                     style={style}
                     onMouseDown={(e) => onCellMouseDown(r, c, e)}
                     onMouseEnter={() => onCellMouseEnter(r, c)}
-                    onDoubleClick={() => startEditing(r, c)}
+                    onDoubleClick={() => enterEdit(r, c)}
                   >
-                    {isEditing ? (
-                      <input
-                        ref={inputRef}
-                        className="cell-input"
-                        value={editBuffer}
-                        onChange={(e) => setEditBuffer(e.target.value)}
-                        onKeyDown={onInputKeyDown}
-                        onBlur={() => commitEdit('none')}
-                      />
+                    {isActive ? (
+                      <>
+                        {!isEditing && <span className="cell-text">{text}</span>}
+                        <input
+                          ref={inputRef}
+                          className={`cell-input${isEditing ? ' editing' : ''}`}
+                          value={isEditing ? editBuffer : ''}
+                          onChange={onEditorChange}
+                          onKeyDown={onEditorKeyDown}
+                          onCompositionStart={onCompositionStart}
+                          onCompositionEnd={onCompositionEnd}
+                          onBlur={() => commitEdit('none')}
+                        />
+                      </>
                     ) : (
                       text
                     )}

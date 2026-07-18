@@ -6,6 +6,18 @@ import { detectLang, t } from '../i18n'
 
 export type BorderPreset = 'all' | 'outer' | 'top' | 'bottom' | 'left' | 'right' | 'none'
 
+type CellValue = string | number | boolean | null
+
+/** A point-in-time snapshot of editable state, for undo/redo. */
+interface Snapshot {
+  sheets: SheetMeta[]
+  contents: Record<number, CellValue[][]>
+  selection: Selection
+}
+
+/** Copied block, kept in-module so pasting can restore formats too. */
+let clipboard: { rows: string[][]; formats: (CellFormat | undefined)[][] } | null = null
+
 export const MAX_ROWS = 200
 export const MAX_COLS = 52 // A .. AZ
 export const DEFAULT_COL_WIDTH = 96
@@ -23,6 +35,9 @@ interface StoreState {
   fileHandle: FileSystemFileHandle | null
   /** Bumped on every mutation to trigger re-renders. */
   rev: number
+  /** Undo/redo history of editable-state snapshots. */
+  past: Snapshot[]
+  future: Snapshot[]
 
   // --- derived getters (read the live HyperFormula state) ---
   getRaw: (row: number, col: number) => string
@@ -46,6 +61,13 @@ interface StoreState {
 
   setColWidth: (col: number, width: number) => void
   setRowHeight: (row: number, height: number) => void
+
+  undo: () => void
+  redo: () => void
+  /** Copy the selection to the internal clipboard; returns TSV for the system clipboard. */
+  copySelection: () => string
+  cutSelection: () => string
+  pasteText: (text: string) => void
 
   setFileHandle: (handle: FileSystemFileHandle | null) => void
 
@@ -94,6 +116,8 @@ export const useStore = create<StoreState>((set, get) => {
     fileName: t('defaultFileName', detectLang()),
     fileHandle: null,
     rev: 0,
+    past: [],
+    future: [],
 
     activeSheet() {
       const s = get()
@@ -116,6 +140,7 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     setCellContent(row, col, raw) {
+      pushUndo(set, get)
       const { hf, activeSheetId } = get()
       const content = raw === '' ? null : raw
       hf.setCellContents({ sheet: activeSheetId, row, col }, content)
@@ -143,6 +168,7 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     applyFormat(patch) {
+      pushUndo(set, get)
       const { selection } = get()
       const sheet = get().activeSheet()
       const formats = { ...sheet.formats }
@@ -155,6 +181,7 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     applyBorders(preset) {
+      pushUndo(set, get)
       const sheet = get().activeSheet()
       const b = selectionBounds(get().selection)
       const THIN: BorderSide = { style: 'thin', color: '#000000' }
@@ -193,6 +220,7 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     clearSelectedContents() {
+      pushUndo(set, get)
       const { hf, activeSheetId, selection } = get()
       for (const ref of iterateSelection(selection)) {
         hf.setCellContents({ sheet: activeSheetId, row: ref.row, col: ref.col }, null)
@@ -204,6 +232,7 @@ export const useStore = create<StoreState>((set, get) => {
       const sheet = get().activeSheet()
       const b = selectionBounds(get().selection)
       if (b.top === b.bottom && b.left === b.right) return
+      pushUndo(set, get)
       const merge: MergeRange = { top: b.top, left: b.left, bottom: b.bottom, right: b.right }
       // Drop any existing merges that overlap the new one.
       const merges = sheet.merges.filter((m) => !overlaps(m, merge))
@@ -213,6 +242,7 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     unmergeSelection() {
+      pushUndo(set, get)
       const sheet = get().activeSheet()
       const b = selectionBounds(get().selection)
       const sel: MergeRange = { top: b.top, left: b.left, bottom: b.bottom, right: b.right }
@@ -222,6 +252,7 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     sortSelection(ascending) {
+      pushUndo(set, get)
       const { hf, activeSheetId, selection } = get()
       const sheet = get().activeSheet()
       const b = selectionBounds(selection)
@@ -301,6 +332,8 @@ export const useStore = create<StoreState>((set, get) => {
         sheets: [...sheets, { id, name, formats: {}, merges: [], colWidths: {}, rowHeights: {} }],
         activeSheetId: id,
         selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
+        past: [],
+        future: [],
       })
       bump(set)
     },
@@ -314,6 +347,8 @@ export const useStore = create<StoreState>((set, get) => {
       set({
         sheets: remaining,
         activeSheetId: get().activeSheetId === id ? remaining[0].id : get().activeSheetId,
+        past: [],
+        future: [],
       })
       void meta
       bump(set)
@@ -360,10 +395,136 @@ export const useStore = create<StoreState>((set, get) => {
         fileName,
         fileHandle: null,
         rev: get().rev + 1,
+        past: [],
+        future: [],
       })
+    },
+
+    undo() {
+      const { past, hf } = get()
+      if (!past.length) return
+      const current = captureSnapshot(get)
+      const snap = past[past.length - 1]
+      for (const s of snap.sheets) hf.setSheetContent(s.id, snap.contents[s.id])
+      set((st) => ({
+        sheets: snap.sheets.map(cloneMeta),
+        selection: snap.selection,
+        editing: null,
+        past: st.past.slice(0, -1),
+        future: [...st.future, current],
+        rev: st.rev + 1,
+      }))
+    },
+
+    redo() {
+      const { future, hf } = get()
+      if (!future.length) return
+      const current = captureSnapshot(get)
+      const snap = future[future.length - 1]
+      for (const s of snap.sheets) hf.setSheetContent(s.id, snap.contents[s.id])
+      set((st) => ({
+        sheets: snap.sheets.map(cloneMeta),
+        selection: snap.selection,
+        editing: null,
+        future: st.future.slice(0, -1),
+        past: [...st.past, current],
+        rev: st.rev + 1,
+      }))
+    },
+
+    copySelection() {
+      const { hf, activeSheetId } = get()
+      const sheet = get().activeSheet()
+      const b = selectionBounds(get().selection)
+      const rows: string[][] = []
+      const formats: (CellFormat | undefined)[][] = []
+      for (let r = b.top; r <= b.bottom; r++) {
+        const rowV: string[] = []
+        const rowF: (CellFormat | undefined)[] = []
+        for (let c = b.left; c <= b.right; c++) {
+          const raw = hf.getCellSerialized({ sheet: activeSheetId, row: r, col: c })
+          rowV.push(raw === null || raw === undefined ? '' : String(raw))
+          rowF.push(sheet.formats[key(r, c)])
+        }
+        rows.push(rowV)
+        formats.push(rowF)
+      }
+      clipboard = { rows, formats }
+      return rows.map((r) => r.join('\t')).join('\n')
+    },
+
+    cutSelection() {
+      const tsv = get().copySelection()
+      get().clearSelectedContents()
+      return tsv
+    },
+
+    pasteText(text) {
+      if (!text) return
+      const lines = text.replace(/\r\n?/g, '\n').split('\n')
+      if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
+      const cells = lines.map((line) => line.split('\t'))
+      const pastedTsv = cells.map((r) => r.join('\t')).join('\n')
+      const internal =
+        clipboard && clipboard.rows.map((r) => r.join('\t')).join('\n') === pastedTsv
+          ? clipboard
+          : null
+
+      pushUndo(set, get)
+      const { hf, activeSheetId } = get()
+      const sheet = get().activeSheet()
+      const { row, col } = get().selection.focus
+      const formats = { ...sheet.formats }
+      let maxR = row
+      let maxC = col
+      cells.forEach((line, i) => {
+        line.forEach((val, j) => {
+          const r = row + i
+          const c = col + j
+          if (r >= MAX_ROWS || c >= MAX_COLS) return
+          hf.setCellContents({ sheet: activeSheetId, row: r, col: c }, val === '' ? null : val)
+          if (internal) {
+            const f = internal.formats[i]?.[j]
+            if (f) formats[key(r, c)] = { ...f }
+            else delete formats[key(r, c)]
+          }
+          maxR = Math.max(maxR, r)
+          maxC = Math.max(maxC, c)
+        })
+      })
+      if (internal) updateSheet(set, get, sheet.id, { formats })
+      set({ selection: { anchor: { row, col }, focus: { row: maxR, col: maxC } } })
+      bump(set)
     },
   }
 })
+
+function cloneMeta(m: SheetMeta): SheetMeta {
+  return {
+    id: m.id,
+    name: m.name,
+    formats: structuredClone(m.formats),
+    merges: m.merges.map((x) => ({ ...x })),
+    colWidths: { ...m.colWidths },
+    rowHeights: { ...m.rowHeights },
+  }
+}
+
+function captureSnapshot(get: () => StoreState): Snapshot {
+  const { hf, sheets, selection } = get()
+  const contents: Record<number, CellValue[][]> = {}
+  for (const s of sheets) contents[s.id] = hf.getSheetSerialized(s.id) as CellValue[][]
+  return { sheets: sheets.map(cloneMeta), contents, selection }
+}
+
+/** Record the current state so the next mutation can be undone. */
+function pushUndo(
+  set: (fn: (s: StoreState) => Partial<StoreState>) => void,
+  get: () => StoreState,
+) {
+  const snap = captureSnapshot(get)
+  set((s) => ({ past: [...s.past, snap].slice(-100), future: [] }))
+}
 
 function updateSheet(
   set: (partial: Partial<StoreState>) => void,
