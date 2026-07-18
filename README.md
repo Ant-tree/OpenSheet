@@ -60,6 +60,23 @@ npm run preview  # preview the production build
 
 The status bar shows the live **count · sum · average** of the current selection.
 
+## Mobile app (Android / iOS)
+
+The UI is responsive and works in mobile browsers. To ship it as a native app,
+the repo is configured for [Capacitor](https://capacitorjs.com/):
+
+```bash
+npm install
+npx cap add android          # and/or: npx cap add ios  (needs Android Studio / Xcode + CocoaPods)
+npm run cap:android          # builds, syncs, and opens Android Studio (npm run cap:ios for Xcode)
+```
+
+Then Run/Archive from Android Studio or Xcode to produce the `.apk` / `.ipa`.
+`npm run cap:sync` rebuilds and copies the web bundle into the native projects.
+
+> Note: **Save in place** (File System Access API) is desktop-Chromium only. On
+> mobile, opening uses the system file picker and saving downloads a copy.
+
 ## Tech stack
 
 - **Vite + React + TypeScript** — UI and grid rendering

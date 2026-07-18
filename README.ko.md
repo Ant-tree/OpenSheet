@@ -58,6 +58,23 @@ npm run preview  # 빌드 결과 미리보기
 
 하단 상태 표시줄에는 선택 범위의 **개수 · 합계 · 평균**이 실시간 표시됩니다.
 
+## 모바일 앱 (안드로이드 / iOS)
+
+UI가 반응형이라 모바일 브라우저에서 바로 동작합니다. 네이티브 앱으로 패키징하려면
+[Capacitor](https://capacitorjs.com/) 설정이 되어 있습니다:
+
+```bash
+npm install
+npx cap add android          # 또는: npx cap add ios  (Android Studio / Xcode + CocoaPods 필요)
+npm run cap:android          # 빌드·동기화 후 Android Studio 열기 (iOS는 npm run cap:ios)
+```
+
+이후 Android Studio 또는 Xcode에서 Run/Archive 하면 `.apk` / `.ipa`가 생성됩니다.
+`npm run cap:sync`는 웹 빌드를 다시 만들어 네이티브 프로젝트에 복사합니다.
+
+> 참고: **원본에 저장**(File System Access API)은 데스크톱 크로미엄 전용입니다. 모바일에서는
+> 열기는 시스템 파일 선택기를 쓰고, 저장은 사본 다운로드로 동작합니다.
+
 ## 기술 스택
 
 - **Vite + React + TypeScript** — UI와 그리드 렌더링
