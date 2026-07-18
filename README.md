@@ -54,6 +54,7 @@ npm run preview  # preview the production build
 - **Formatting shortcuts**: `Ctrl/Cmd+B` (bold), `Ctrl/Cmd+I` (italic), `Ctrl/Cmd+U` (underline)
 - **Borders**: the *Borders* toolbar menu (all / outer / top / bottom / left / right / none)
 - **Formulas**: type an expression starting with `=` in a cell or the formula bar
+- **Reference picking**: while editing a `=`formula, click (or drag) cells to insert their `A1` reference / range
 - **Resize columns**: drag the column-header border
 - **Rename a sheet**: double-click its tab
 

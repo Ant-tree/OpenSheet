@@ -56,6 +56,18 @@ function resolveBorders(
   }
 }
 
+/** A1 reference for a single cell, or a range if two corners differ. */
+function rangeA1(a: { row: number; col: number }, b: { row: number; col: number }): string {
+  const cell = (r: number, c: number) => `${colToLetter(c)}${r + 1}`
+  const top = Math.min(a.row, b.row)
+  const bottom = Math.max(a.row, b.row)
+  const left = Math.min(a.col, b.col)
+  const right = Math.max(a.col, b.col)
+  return top === bottom && left === right
+    ? cell(top, left)
+    : `${cell(top, left)}:${cell(bottom, right)}`
+}
+
 export default function Grid() {
   useStore((s) => s.rev) // subscribe so the grid re-renders on every data change
   const selection = useStore((s) => s.selection)
@@ -75,6 +87,10 @@ export default function Grid() {
   const [editBuffer, setEditBuffer] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Formula "point mode": while editing a =formula, clicking/dragging cells
+  // inserts their A1 reference instead of moving the selection.
+  const pointAnchor = useRef<{ row: number; col: number } | null>(null)
+  const refRange = useRef<{ start: number; end: number } | null>(null)
 
   // Build lookup of merge coverage for the active sheet.
   const { covered, anchorOf } = useMemo(() => {
@@ -109,6 +125,8 @@ export default function Grid() {
       setCellContent(ed.row, ed.col, editBuffer)
       setEditing(null)
       setEditBuffer('')
+      pointAnchor.current = null
+      refRange.current = null
       if (move === 'down') moveSelection(1, 0, false)
       else if (move === 'right') moveSelection(0, 1, false)
     },
@@ -118,7 +136,40 @@ export default function Grid() {
   const cancelEdit = useCallback(() => {
     setEditing(null)
     setEditBuffer('')
+    pointAnchor.current = null
+    refRange.current = null
   }, [setEditing])
+
+  // True when the active input holds a formula (=…) and is ready to take a ref.
+  const inFormulaEdit = () =>
+    !!useStore.getState().editing && (inputRef.current?.value ?? '').trimStart().startsWith('=')
+
+  // Insert (or, if we just placed one, replace) a cell/range reference at the caret.
+  const insertRef = (ref: string) => {
+    const input = inputRef.current
+    if (!input) return
+    const buf = input.value
+    let start: number
+    let end: number
+    if (refRange.current) {
+      start = refRange.current.start
+      end = refRange.current.end
+    } else {
+      start = input.selectionStart ?? buf.length
+      end = input.selectionEnd ?? start
+    }
+    const next = buf.slice(0, start) + ref + buf.slice(end)
+    refRange.current = { start, end: start + ref.length }
+    setEditBuffer(next)
+    const caret = start + ref.length
+    requestAnimationFrame(() => {
+      const el = inputRef.current
+      if (el) {
+        el.focus({ preventScroll: true })
+        el.setSelectionRange(caret, caret)
+      }
+    })
+  }
 
   // The active cell always hosts a focused input — even when not editing — so it
   // captures the first keystroke, including IME composition (Korean). Starting
@@ -140,6 +191,8 @@ export default function Grid() {
     if (!useStore.getState().editing) {
       setEditing({ row: selection.focus.row, col: selection.focus.col })
     }
+    // The user typed, so any auto-inserted reference is now committed text.
+    refRange.current = null
     setEditBuffer(e.target.value)
   }
 
@@ -197,6 +250,18 @@ export default function Grid() {
 
   // ----- mouse selection -----
   const onCellMouseDown = (row: number, col: number, e: React.MouseEvent) => {
+    // Clicking inside the cell currently being edited: let the input place its
+    // text caret (don't commit or re-select).
+    if (editing?.row === row && editing?.col === col) return
+    // Formula point mode: while editing a =formula, clicking a cell inserts its
+    // reference into the formula instead of moving the selection.
+    if (inFormulaEdit()) {
+      e.preventDefault()
+      pointAnchor.current = { row, col }
+      dragging.current = true
+      insertRef(rangeA1({ row, col }, { row, col }))
+      return
+    }
     // Clicking a non-input target (a cell body) would move focus to <body> and
     // steal it from the active-cell input that owns keyboard navigation. Prevent
     // that; still allow caret placement when clicking inside the edit input.
@@ -211,12 +276,19 @@ export default function Grid() {
     // Focus follows the active cell's input via a layout effect on selection.
   }
   const onCellMouseEnter = (row: number, col: number) => {
+    if (pointAnchor.current) {
+      insertRef(rangeA1(pointAnchor.current, { row, col })) // drag to extend the referenced range
+      return
+    }
     if (dragging.current) {
       setSelection({ anchor: useStore.getState().selection.anchor, focus: { row, col } })
     }
   }
   useEffect(() => {
-    const up = () => (dragging.current = false)
+    const up = () => {
+      dragging.current = false
+      pointAnchor.current = null // end the drag; the ref stays replaceable until a keystroke
+    }
     window.addEventListener('mouseup', up)
     return () => window.removeEventListener('mouseup', up)
   }, [])
