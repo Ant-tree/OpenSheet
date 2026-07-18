@@ -9,6 +9,11 @@
 
 ## 실행 방법
 
+**맥 — 터미널 없이:** Finder에서 **`start.command`** 파일을 더블클릭하세요. Node.js
+확인 → 최초 1회 의존성 설치 → 서버 실행 → 브라우저 자동 열기까지 알아서 처리합니다.
+
+또는 터미널에서:
+
 ```bash
 npm install
 npm run dev      # http://localhost:5173 자동 실행

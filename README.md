@@ -10,6 +10,12 @@ deployed as a static site.
 
 ## Getting started
 
+**macOS — no terminal needed:** double-click **`start.command`** in Finder. It
+checks Node.js, installs dependencies on first run, starts the server, and opens
+your browser automatically.
+
+Or from a terminal:
+
 ```bash
 npm install
 npm run dev      # opens http://localhost:5173
