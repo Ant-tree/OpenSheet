@@ -167,6 +167,20 @@ body {
 .menu-hint {
   color: var(--header-fg);
   font-size: 11px;
+  flex: none;
+}
+.menu-empty {
+  padding: 10px;
+  color: var(--header-fg);
+  font-size: 13px;
+  text-align: center;
+}
+.recent-name {
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  display: inline-block;
 }
 
 .toolbar select,

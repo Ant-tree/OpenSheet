@@ -18,6 +18,9 @@ export function detectLang(): Lang {
 const dict = {
   en: {
     open: 'Open',
+    recent: 'Recent',
+    noRecent: 'No recent files',
+    clearRecent: 'Clear recent',
     save: 'Save',
     saveInPlace: 'Save',
     saveInPlaceHint: 'Open a file first',
@@ -69,6 +72,9 @@ const dict = {
   },
   ko: {
     open: '열기',
+    recent: '최근 파일',
+    noRecent: '최근 파일 없음',
+    clearRecent: '최근 목록 지우기',
     save: '저장',
     saveInPlace: '원본에 저장',
     saveInPlaceHint: '먼저 파일을 열어 주세요',

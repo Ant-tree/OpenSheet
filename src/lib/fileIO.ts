@@ -392,6 +392,7 @@ export function supportsFileSystemAccess(): boolean {
 export async function pickAndReadWorkbook(): Promise<{
   wb: ImportedWorkbook
   handle: FileSystemFileHandle
+  bytes: ArrayBuffer
 } | null> {
   const picker = (
     window as unknown as {
@@ -419,8 +420,9 @@ export async function pickAndReadWorkbook(): Promise<{
   }
   const handle = handles[0]
   const file = await handle.getFile()
+  const bytes = await file.arrayBuffer()
   const wb = await readWorkbookFile(file)
-  return { wb, handle }
+  return { wb, handle, bytes }
 }
 
 /** Overwrite the file backing `handle` with the current state. */

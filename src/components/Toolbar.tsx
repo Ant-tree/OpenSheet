@@ -9,7 +9,14 @@ import {
   supportsFileSystemAccess,
 } from '../lib/fileIO'
 import { NUMBER_FORMAT_PRESETS, toPresetToken } from '../lib/format'
-import { useT } from '../i18n'
+import {
+  addRecentFile,
+  clearRecentFiles,
+  listRecentFiles,
+  relativeTime,
+  type RecentFile,
+} from '../lib/recentFiles'
+import { useLangStore, useT } from '../i18n'
 import type { HAlign } from '../types'
 import Icon from './Icon'
 
@@ -65,6 +72,32 @@ function Dropdown({
   )
 }
 
+/** Loads and lists recent files inside the Recent dropdown (fetches on open). */
+function RecentList({ onPick }: { onPick: (f: RecentFile) => void }) {
+  const t = useT()
+  const lang = useLangStore((s) => s.lang)
+  const [items, setItems] = useState<RecentFile[] | null>(null)
+  useEffect(() => {
+    listRecentFiles().then(setItems)
+  }, [])
+  if (items && !items.length) return <div className="menu-empty">{t('noRecent')}</div>
+  return (
+    <>
+      {(items ?? []).map((f) => (
+        <button key={f.id} className="menu-item" onClick={() => onPick(f)}>
+          <span className="menu-label recent-name">{f.name}</span>
+          <span className="menu-hint">{relativeTime(f.savedAt, lang)}</span>
+        </button>
+      ))}
+      {items && items.length > 0 && (
+        <button className="menu-item" onClick={() => clearRecentFiles()}>
+          {t('clearRecent')}
+        </button>
+      )}
+    </>
+  )
+}
+
 const BORDER_ITEMS: [BorderPreset, string][] = [
   ['all', 'border-all'],
   ['outer', 'border-outer'],
@@ -115,6 +148,7 @@ export default function Toolbar() {
         if (!result) return
         loadWorkbook(result.wb.sheets, result.wb.fileName)
         setFileHandle(result.handle)
+        addRecentFile(result.wb.fileName, result.bytes)
       } catch (err) {
         alert(t('readFail') + (err as Error).message)
       }
@@ -127,12 +161,27 @@ export default function Toolbar() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
+      const bytes = await file.arrayBuffer()
       const wb = await readWorkbookFile(file)
       loadWorkbook(wb.sheets, wb.fileName)
+      addRecentFile(wb.fileName, bytes)
     } catch (err) {
       alert(t('readFail') + (err as Error).message)
     }
     e.target.value = ''
+  }
+
+  // Reopen a file from the recent list (stored bytes; no live handle).
+  const openRecent = async (f: RecentFile) => {
+    try {
+      const file = new File([f.bytes], f.name)
+      const wb = await readWorkbookFile(file)
+      loadWorkbook(wb.sheets, wb.fileName)
+      setFileHandle(null)
+      addRecentFile(f.name, f.bytes) // bump recency
+    } catch (err) {
+      alert(t('readFail') + (err as Error).message)
+    }
   }
 
   const saveInPlace = async () => {
@@ -161,6 +210,17 @@ export default function Toolbar() {
           <Icon name="open" />
           {t('open')}
         </button>
+        <Dropdown
+          title={t('recent')}
+          trigger={
+            <>
+              <Icon name="recent" />
+              {t('recent')}
+            </>
+          }
+        >
+          <RecentList onPick={openRecent} />
+        </Dropdown>
         <Dropdown
           title={t('save')}
           trigger={
