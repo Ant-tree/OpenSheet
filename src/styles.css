@@ -61,9 +61,13 @@ body {
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
-  padding: 6px 10px;
+  /* Extra top padding clears the mobile status bar / notch (0 on desktop). */
+  padding: calc(6px + env(safe-area-inset-top)) 10px 6px;
   background: var(--toolbar-bg);
   border-bottom: 1px solid var(--border);
+  /* Sit above the grid so dropdown menus overlay it instead of hiding behind. */
+  position: relative;
+  z-index: 20;
 }
 
 .toolbar .group {

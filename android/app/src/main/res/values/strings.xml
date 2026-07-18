@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">OpenSheet</string>
     <string name="title_activity_main">OpenSheet</string>
-    <string name="package_name">dev.anttree.opensheet</string>
-    <string name="custom_url_scheme">dev.anttree.opensheet</string>
+    <string name="package_name">com.anttree.opensheet</string>
+    <string name="custom_url_scheme">com.anttree.opensheet</string>
 </resources>

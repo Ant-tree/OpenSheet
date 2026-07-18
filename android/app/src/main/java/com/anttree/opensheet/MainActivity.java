@@ -1,4 +1,4 @@
-package dev.anttree.opensheet;
+package com.anttree.opensheet;
 
 import com.getcapacitor.BridgeActivity;
 
