@@ -1,6 +1,9 @@
 import { useStore } from '../store/useStore'
+import { useT } from '../i18n'
+import Icon from './Icon'
 
 export default function SheetTabs() {
+  const t = useT()
   const sheets = useStore((s) => s.sheets)
   const activeSheetId = useStore((s) => s.activeSheetId)
   const setActiveSheet = useStore((s) => s.setActiveSheet)
@@ -16,28 +19,28 @@ export default function SheetTabs() {
           className={`sheet-tab${s.id === activeSheetId ? ' active' : ''}`}
           onMouseDown={() => setActiveSheet(s.id)}
           onDoubleClick={() => {
-            const name = prompt('시트 이름', s.name)
+            const name = prompt(t('renameHint'), s.name)
             if (name) renameSheet(s.id, name)
           }}
-          title="더블클릭하여 이름 변경"
+          title={t('renameHint')}
         >
           {s.name}
           {sheets.length > 1 && (
             <span
               className="close"
-              title="시트 삭제"
+              title={t('deleteSheet')}
               onMouseDown={(e) => {
                 e.stopPropagation()
-                if (confirm(`'${s.name}' 시트를 삭제할까요?`)) removeSheet(s.id)
+                if (confirm(t('deleteSheetConfirm').replace('{name}', s.name))) removeSheet(s.id)
               }}
             >
-              ×
+              <Icon name="close" />
             </span>
           )}
         </div>
       ))}
-      <button className="add-sheet" title="시트 추가" onClick={addSheet}>
-        +
+      <button className="add-sheet" title={t('addSheet')} onClick={addSheet}>
+        <Icon name="plus" />
       </button>
     </div>
   )

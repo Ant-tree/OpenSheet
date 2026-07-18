@@ -1,5 +1,19 @@
 export type HAlign = 'left' | 'center' | 'right'
 
+/** One edge of a cell border. `style` is an Excel border-style name (thin, medium, thick, …). */
+export interface BorderSide {
+  style: string
+  color?: string // e.g. "#000000"
+}
+
+/** Per-edge cell borders. */
+export interface CellBorders {
+  top?: BorderSide
+  right?: BorderSide
+  bottom?: BorderSide
+  left?: BorderSide
+}
+
 export interface CellFormat {
   bold?: boolean
   italic?: boolean
@@ -9,6 +23,7 @@ export interface CellFormat {
   bgColor?: string // background fill
   /** A number-format token understood by formatNumber(): e.g. "0.00", "#,##0", "0%", "$#,##0.00", "yyyy-mm-dd" */
   numberFormat?: string
+  borders?: CellBorders
 }
 
 /** A rectangular block of merged cells. Anchored at (top,left). */

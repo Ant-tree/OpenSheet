@@ -1,36 +1,107 @@
+import type { BorderSide } from '../types'
 import type { CellFormat } from '../types'
+import type { MsgKey } from '../i18n'
+
+/** Visual weight of a border style, used to pick the "winner" on a shared edge. */
+export function borderWeight(side: BorderSide | undefined): number {
+  if (!side) return 0
+  switch (side.style) {
+    case 'thick':
+    case 'double':
+      return 3
+    case 'medium':
+    case 'mediumDashed':
+    case 'mediumDashDot':
+    case 'mediumDashDotDot':
+    case 'slantDashDot':
+      return 2
+    default:
+      return 1
+  }
+}
+
+/** Of two borders sharing an edge, return the heavier one (presence beats absence). */
+export function strongerBorder(
+  a: BorderSide | undefined,
+  b: BorderSide | undefined,
+): BorderSide | undefined {
+  return borderWeight(a) >= borderWeight(b) ? a ?? b : b
+}
+
+/** Map an Excel border style + color to a CSS `border` shorthand value. */
+export function borderCss(side: BorderSide): string {
+  const color = side.color ?? '#000000'
+  switch (side.style) {
+    case 'thick':
+      return `3px solid ${color}`
+    case 'double':
+      return `3px double ${color}`
+    case 'medium':
+    case 'slantDashDot':
+      return `2px solid ${color}`
+    case 'mediumDashed':
+    case 'mediumDashDot':
+    case 'mediumDashDotDot':
+      return `2px dashed ${color}`
+    case 'dotted':
+      return `1px dotted ${color}`
+    case 'dashed':
+    case 'dashDot':
+    case 'dashDotDot':
+      return `1px dashed ${color}`
+    default: // thin, hair, and anything unrecognized
+      return `1px solid ${color}`
+  }
+}
+
+const CURRENCY_RE = /[₩$€£¥]/
+
+/** Strip Excel format noise (colors, conditions, quoted literals, padding). */
+function cleanFormatSection(section: string): string {
+  return section
+    .replace(/\[[^\]]*\]/g, '') // [Red], [$-409], [>0] conditions
+    .replace(/"[^"]*"/g, '') // quoted literals
+    .replace(/\\./g, '') // escaped chars
+    .replace(/_./g, '') // padding (_x reserves a char-width)
+    .replace(/\*./g, '') // fill (*x)
+}
+
+function decimalsOf(section: string): number {
+  const cleaned = cleanFormatSection(section)
+  const dot = cleaned.indexOf('.')
+  return dot === -1 ? 0 : (cleaned.slice(dot + 1).match(/[0#]/g) || []).length
+}
 
 /**
- * A small, pragmatic number-format implementation covering the presets exposed
- * in the toolbar. It is not a full Excel format-code parser, but handles the
- * common cases: thousands separators, fixed decimals, percent, currency, and
- * a couple of date formats.
+ * A pragmatic number-format implementation covering the presets exposed in the
+ * toolbar plus the real Excel format codes found in workbooks (accounting/
+ * currency formats with quoted symbols, multi-section codes, date literals).
+ * Not a full format-code engine, but handles the common cases faithfully.
  */
 export function formatNumber(value: number, token: string | undefined): string {
   if (token === undefined || token === '' || token === 'General') {
     return String(value)
   }
 
-  // Date tokens (very small subset).
-  if (/[ymdhs]/i.test(token) && !/[#0]/.test(token)) {
-    return formatDate(value, token)
+  // Excel codes have up to four sections: positive;negative;zero;text.
+  const section = token.split(';')[0]
+  const cleaned = cleanFormatSection(section)
+
+  // Date/time codes contain y/m/d/h/s and no numeric placeholders.
+  if (/[ymdhs]/i.test(cleaned) && !/[#0]/.test(cleaned)) {
+    return formatDate(value, section)
   }
 
-  const isPercent = token.includes('%')
-  const isCurrency = token.includes('$') || token.includes('₩')
-  const hasThousands = token.includes(',')
+  const isPercent = cleaned.includes('%')
+  // Currency symbols are often quoted (e.g. accounting: _-"₩"* #,##0_-), so
+  // detect them on the raw token, not the cleaned one.
+  const currency = CURRENCY_RE.exec(token)?.[0] ?? ''
+  const hasThousands = cleaned.includes(',')
 
   let n = value
   if (isPercent) n = n * 100
 
-  // Count decimals from the token (digits after the dot).
-  const dotIdx = token.indexOf('.')
-  let decimals = 0
-  if (dotIdx !== -1) {
-    const frac = token.slice(dotIdx + 1)
-    decimals = (frac.match(/[0#]/g) || []).length
-  }
-
+  const decimals = decimalsOf(section)
   let out = Math.abs(n).toFixed(decimals)
 
   if (hasThousands) {
@@ -40,10 +111,23 @@ export function formatNumber(value: number, token: string | undefined): string {
   }
 
   const sign = n < 0 ? '-' : ''
-  const symbol = isCurrency ? (token.includes('₩') ? '₩' : '$') : ''
   const suffix = isPercent ? '%' : ''
+  return `${sign}${currency}${out}${suffix}`
+}
 
-  return `${sign}${symbol}${out}${suffix}`
+/** Classify any Excel format code into the closest toolbar preset token. */
+export function toPresetToken(code: string | undefined): string {
+  if (!code || code === 'General') return 'General'
+  if (NUMBER_FORMAT_PRESETS.some((p) => p.token === code)) return code
+
+  const section = code.split(';')[0]
+  const cleaned = cleanFormatSection(section)
+  if (/[ymdhs]/i.test(cleaned) && !/[#0]/.test(cleaned)) return 'yyyy-mm-dd'
+  if (code.includes('₩')) return '₩#,##0'
+  if (/[$€£¥]/.test(code)) return '$#,##0.00'
+  if (section.includes('%')) return decimalsOf(section) >= 2 ? '0.00%' : '0%'
+  if (/[#0]/.test(cleaned)) return decimalsOf(section) >= 1 ? '#,##0.00' : '#,##0'
+  return 'General'
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -54,16 +138,52 @@ function excelSerialToDate(serial: number): Date {
   return new Date(EXCEL_EPOCH + serial * DAY_MS)
 }
 
+/**
+ * Render an Excel date/time code (e.g. `yyyy-mm-dd`, `m"월" d"일"`). Walks the
+ * token so quoted literals are preserved and single-letter tokens (m, d) work.
+ * `m` is treated as month (minutes are rarely needed in this app).
+ */
 function formatDate(serial: number, token: string): string {
   const d = excelSerialToDate(serial)
   const pad = (x: number) => String(x).padStart(2, '0')
-  return token
-    .replace(/yyyy/gi, String(d.getUTCFullYear()))
-    .replace(/yy/gi, String(d.getUTCFullYear()).slice(-2))
-    .replace(/mm/g, pad(d.getUTCMonth() + 1))
-    .replace(/dd/gi, pad(d.getUTCDate()))
-    .replace(/hh/gi, pad(d.getUTCHours()))
-    .replace(/ss/gi, pad(d.getUTCSeconds()))
+  const Y = d.getUTCFullYear()
+  const parts: Array<[RegExp, string]> = [
+    [/^yyyy/i, String(Y)],
+    [/^yy/i, String(Y).slice(-2)],
+    [/^mm/i, pad(d.getUTCMonth() + 1)],
+    [/^m/i, String(d.getUTCMonth() + 1)],
+    [/^dd/i, pad(d.getUTCDate())],
+    [/^d/i, String(d.getUTCDate())],
+    [/^hh/i, pad(d.getUTCHours())],
+    [/^h/i, String(d.getUTCHours())],
+    [/^ss/i, pad(d.getUTCSeconds())],
+    [/^s/i, String(d.getUTCSeconds())],
+  ]
+  let out = ''
+  let i = 0
+  while (i < token.length) {
+    if (token[i] === '"') {
+      const end = token.indexOf('"', i + 1)
+      out += token.slice(i + 1, end < 0 ? token.length : end)
+      i = end < 0 ? token.length : end + 1
+      continue
+    }
+    if (token[i] === '\\') {
+      out += token[i + 1] ?? ''
+      i += 2
+      continue
+    }
+    const rest = token.slice(i)
+    const hit = parts.find(([re]) => re.test(rest))
+    if (hit) {
+      out += hit[1]
+      i += hit[0].exec(rest)![0].length
+    } else {
+      out += token[i]
+      i += 1
+    }
+  }
+  return out
 }
 
 /** Turn a computed HyperFormula value into the string shown in a cell. */
@@ -81,13 +201,13 @@ export function displayValue(value: unknown, fmt: CellFormat | undefined): strin
   return String(value)
 }
 
-export const NUMBER_FORMAT_PRESETS: { label: string; token: string }[] = [
-  { label: '일반', token: 'General' },
-  { label: '숫자 (1,234)', token: '#,##0' },
-  { label: '소수 (1,234.00)', token: '#,##0.00' },
-  { label: '백분율 (12%)', token: '0%' },
-  { label: '백분율 (12.00%)', token: '0.00%' },
-  { label: '통화 ($)', token: '$#,##0.00' },
-  { label: '통화 (₩)', token: '₩#,##0' },
-  { label: '날짜 (2024-01-31)', token: 'yyyy-mm-dd' },
+export const NUMBER_FORMAT_PRESETS: { labelKey: MsgKey; token: string }[] = [
+  { labelKey: 'fmtGeneral', token: 'General' },
+  { labelKey: 'fmtNumber', token: '#,##0' },
+  { labelKey: 'fmtDecimal', token: '#,##0.00' },
+  { labelKey: 'fmtPercent', token: '0%' },
+  { labelKey: 'fmtPercent2', token: '0.00%' },
+  { labelKey: 'fmtCurrencyUsd', token: '$#,##0.00' },
+  { labelKey: 'fmtCurrencyKrw', token: '₩#,##0' },
+  { labelKey: 'fmtDate', token: 'yyyy-mm-dd' },
 ]

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { cellRefToA1 } from '../lib/utils'
+import { useT } from '../i18n'
 
 export default function FormulaBar() {
+  const t = useT()
   const selection = useStore((s) => s.selection)
   const rev = useStore((s) => s.rev)
   const setCellContent = useStore((s) => s.setCellContent)
@@ -30,7 +32,7 @@ export default function FormulaBar() {
       <input
         className="formula-input"
         value={value}
-        placeholder="값 또는 =수식 입력"
+        placeholder={t('formulaPlaceholder')}
         onChange={(e) => setValue(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={commit}

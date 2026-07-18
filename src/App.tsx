@@ -5,8 +5,13 @@ import Grid from './components/Grid'
 import SheetTabs from './components/SheetTabs'
 import { useStore } from './store/useStore'
 import { iterateSelection } from './lib/utils'
+import { exportWorkbook, saveToHandle } from './lib/fileIO'
+import { useLangStore, useT } from './i18n'
 
 export default function App() {
+  const t = useT()
+  const lang = useLangStore((s) => s.lang)
+  const setLang = useLangStore((s) => s.setLang)
   const selection = useStore((s) => s.selection)
   const fileName = useStore((s) => s.fileName)
   useStore((s) => s.rev)
@@ -29,6 +34,23 @@ export default function App() {
   // Ctrl/Cmd+B / I / U formatting shortcuts.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Cmd/Ctrl+S saves the workbook instead of letting the browser save the
+      // page HTML. This works even while editing a cell.
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        const store = useStore.getState()
+        if (store.fileHandle) {
+          saveToHandle(store.hf, store.sheets, store.fileHandle).catch((err) =>
+            alert('저장하지 못했습니다: ' + (err as Error).message),
+          )
+        } else {
+          exportWorkbook(store.hf, store.sheets, store.fileName, 'xlsx').catch((err) =>
+            alert('저장하지 못했습니다: ' + (err as Error).message),
+          )
+        }
+        return
+      }
+
       const el = document.activeElement
       const inInput = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
       if (inInput) return
@@ -61,11 +83,26 @@ export default function App() {
         <span className="spacer" />
         {count > 0 && (
           <>
-            <span>개수: {count}</span>
-            <span>합계: {formatStat(sum)}</span>
-            <span>평균: {formatStat(avg)}</span>
+            <span>
+              {t('statusCount')}: {count}
+            </span>
+            <span>
+              {t('statusSum')}: {formatStat(sum)}
+            </span>
+            <span>
+              {t('statusAvg')}: {formatStat(avg)}
+            </span>
           </>
         )}
+        <select
+          className="lang-select"
+          title={t('language')}
+          value={lang}
+          onChange={(e) => setLang(e.target.value as 'en' | 'ko')}
+        >
+          <option value="en">English</option>
+          <option value="ko">한국어</option>
+        </select>
       </div>
     </div>
   )

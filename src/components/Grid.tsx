@@ -7,9 +7,54 @@ import {
   DEFAULT_ROW_HEIGHT,
   HEADER_WIDTH,
 } from '../store/useStore'
-import { displayValue } from '../lib/format'
+import { borderCss, displayValue, strongerBorder } from '../lib/format'
 import { colToLetter, isInSelection, key, selectionBounds } from '../lib/utils'
-import type { MergeRange } from '../types'
+import type { BorderSide, CellBorders, CellFormat, MergeRange } from '../types'
+
+/**
+ * Compute the borders to actually paint for a rendered cell (a normal cell, or
+ * a merge anchor spanning `merge`). Each cell owns its bottom & right edges,
+ * merging in the touching neighbour's border so a shared line is drawn exactly
+ * once (no doubling). Top & left are only painted at the grid's outer edge —
+ * interior top/left segments are painted by the neighbour above/left. For a
+ * merged region we take the union of the constituent cells' outer borders, so
+ * borders stored on merge-covered cells (e.g. the right/bottom of a header box)
+ * are not lost.
+ */
+function resolveBorders(
+  formats: Record<string, CellFormat>,
+  merge: MergeRange | undefined,
+  r: number,
+  c: number,
+): CellBorders {
+  const t = merge ? merge.top : r
+  const b = merge ? merge.bottom : r
+  const l = merge ? merge.left : c
+  const rt = merge ? merge.right : c
+  const B = (rr: number, cc: number) => formats[key(rr, cc)]?.borders
+  let ownTop: BorderSide | undefined
+  let ownBottom: BorderSide | undefined
+  let ownLeft: BorderSide | undefined
+  let ownRight: BorderSide | undefined
+  for (let cc = l; cc <= rt; cc++) {
+    ownTop = strongerBorder(ownTop, B(t, cc)?.top)
+    ownBottom = strongerBorder(ownBottom, B(b, cc)?.bottom)
+  }
+  for (let rr = t; rr <= b; rr++) {
+    ownLeft = strongerBorder(ownLeft, B(rr, l)?.left)
+    ownRight = strongerBorder(ownRight, B(rr, rt)?.right)
+  }
+  let bottom = ownBottom
+  let right = ownRight
+  for (let cc = l; cc <= rt; cc++) bottom = strongerBorder(bottom, B(b + 1, cc)?.top)
+  for (let rr = t; rr <= b; rr++) right = strongerBorder(right, B(rr, rt + 1)?.left)
+  return {
+    top: t === 0 ? ownTop : undefined,
+    left: l === 0 ? ownLeft : undefined,
+    bottom,
+    right,
+  }
+}
 
 export default function Grid() {
   useStore((s) => s.rev) // subscribe so the grid re-renders on every data change
@@ -75,6 +120,12 @@ export default function Grid() {
     }
   }, [editing])
 
+  // Keep keyboard focus on the grid container (which owns arrow-key navigation)
+  // whenever we're not editing a cell — on mount and after an edit finishes.
+  useEffect(() => {
+    if (!editing) scrollRef.current?.focus({ preventScroll: true })
+  }, [editing])
+
   // ----- keyboard navigation on the grid container -----
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -102,7 +153,10 @@ export default function Grid() {
         e.preventDefault()
         clearSelectedContents()
       } else if (k.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        // Printable character starts editing, replacing the cell.
+        // Printable character starts editing, replacing the cell. preventDefault
+        // so the browser doesn't ALSO type this key into the freshly-focused
+        // input (which would duplicate the first character, e.g. "4000"→"44000").
+        e.preventDefault()
         startEditing(selection.focus.row, selection.focus.col, k)
       }
     },
@@ -131,6 +185,8 @@ export default function Grid() {
       setSelection({ anchor: { row, col }, focus: { row, col } })
     }
     dragging.current = true
+    // Ensure the grid keeps keyboard focus so arrow keys navigate.
+    scrollRef.current?.focus({ preventScroll: true })
   }
   const onCellMouseEnter = (row: number, col: number) => {
     if (dragging.current) {
@@ -255,6 +311,13 @@ export default function Grid() {
                   if (fmt.color) style.color = fmt.color
                   if (fmt.bgColor) style.background = fmt.bgColor
                   if (fmt.align) style.textAlign = fmt.align
+                }
+                {
+                  const bd = resolveBorders(sheet.formats, merge, r, c)
+                  if (bd.top) style.borderTop = borderCss(bd.top)
+                  if (bd.left) style.borderLeft = borderCss(bd.left)
+                  if (bd.bottom) style.borderBottom = borderCss(bd.bottom)
+                  if (bd.right) style.borderRight = borderCss(bd.right)
                 }
 
                 return (

@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 import { HyperFormula } from 'hyperformula'
-import type { CellFormat, MergeRange, Selection, SheetMeta } from '../types'
+import type { BorderSide, CellFormat, MergeRange, Selection, SheetMeta } from '../types'
 import { iterateSelection, key, selectionBounds, shiftFormulaRowRefs } from '../lib/utils'
+import { detectLang, t } from '../i18n'
+
+export type BorderPreset = 'all' | 'outer' | 'top' | 'bottom' | 'left' | 'right' | 'none'
 
 export const MAX_ROWS = 200
 export const MAX_COLS = 52 // A .. AZ
@@ -16,6 +19,8 @@ interface StoreState {
   selection: Selection
   editing: { row: number; col: number } | null
   fileName: string
+  /** Writable handle to the opened file (File System Access API), when available. */
+  fileHandle: FileSystemFileHandle | null
   /** Bumped on every mutation to trigger re-renders. */
   rev: number
 
@@ -32,6 +37,7 @@ interface StoreState {
   moveSelection: (dRow: number, dCol: number, extend: boolean) => void
 
   applyFormat: (patch: Partial<CellFormat>) => void
+  applyBorders: (preset: BorderPreset) => void
   clearSelectedContents: () => void
 
   mergeSelection: () => void
@@ -40,6 +46,8 @@ interface StoreState {
 
   setColWidth: (col: number, width: number) => void
   setRowHeight: (row: number, height: number) => void
+
+  setFileHandle: (handle: FileSystemFileHandle | null) => void
 
   addSheet: () => void
   removeSheet: (id: number) => void
@@ -51,6 +59,9 @@ interface StoreState {
       name: string
       rows: (string | number | boolean | null)[][]
       merges?: MergeRange[]
+      formats?: Record<string, CellFormat>
+      colWidths?: Record<number, number>
+      rowHeights?: Record<number, number>
     }[],
     fileName: string,
   ) => void
@@ -80,7 +91,8 @@ export const useStore = create<StoreState>((set, get) => {
     activeSheetId: initial.activeSheetId,
     selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
     editing: null,
-    fileName: '통합 문서.xlsx',
+    fileName: t('defaultFileName', detectLang()),
+    fileHandle: null,
     rev: 0,
 
     activeSheet() {
@@ -137,6 +149,44 @@ export const useStore = create<StoreState>((set, get) => {
       for (const ref of iterateSelection(selection)) {
         const k = key(ref.row, ref.col)
         formats[k] = { ...formats[k], ...patch }
+      }
+      updateSheet(set, get, sheet.id, { formats })
+      bump(set)
+    },
+
+    applyBorders(preset) {
+      const sheet = get().activeSheet()
+      const b = selectionBounds(get().selection)
+      const THIN: BorderSide = { style: 'thin', color: '#000000' }
+      const formats = { ...sheet.formats }
+      for (let r = b.top; r <= b.bottom; r++) {
+        for (let c = b.left; c <= b.right; c++) {
+          const k = key(r, c)
+          const cur = formats[k] ?? {}
+          let borders: NonNullable<CellFormat['borders']> = { ...(cur.borders ?? {}) }
+          if (preset === 'none') {
+            borders = {}
+          } else if (preset === 'all') {
+            borders = { top: THIN, right: THIN, bottom: THIN, left: THIN }
+          } else if (preset === 'outer') {
+            if (r === b.top) borders.top = THIN
+            if (r === b.bottom) borders.bottom = THIN
+            if (c === b.left) borders.left = THIN
+            if (c === b.right) borders.right = THIN
+          } else if (preset === 'top' && r === b.top) {
+            borders.top = THIN
+          } else if (preset === 'bottom' && r === b.bottom) {
+            borders.bottom = THIN
+          } else if (preset === 'left' && c === b.left) {
+            borders.left = THIN
+          } else if (preset === 'right' && c === b.right) {
+            borders.right = THIN
+          }
+          const next: CellFormat = { ...cur }
+          if (Object.keys(borders).length) next.borders = borders
+          else delete next.borders
+          formats[k] = next
+        }
       }
       updateSheet(set, get, sheet.id, { formats })
       bump(set)
@@ -236,6 +286,10 @@ export const useStore = create<StoreState>((set, get) => {
       })
     },
 
+    setFileHandle(handle) {
+      set({ fileHandle: handle })
+    },
+
     addSheet() {
       const { hf, sheets } = get()
       let n = sheets.length + 1
@@ -291,10 +345,10 @@ export const useStore = create<StoreState>((set, get) => {
       const metas: SheetMeta[] = imported.map((s) => ({
         id: hf.getSheetId(s.name)!,
         name: s.name,
-        formats: {},
+        formats: s.formats ?? {},
         merges: s.merges ?? [],
-        colWidths: {},
-        rowHeights: {},
+        colWidths: s.colWidths ?? {},
+        rowHeights: s.rowHeights ?? {},
       }))
 
       set({
@@ -304,6 +358,7 @@ export const useStore = create<StoreState>((set, get) => {
         selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
         editing: null,
         fileName,
+        fileHandle: null,
         rev: get().rev + 1,
       })
     },
