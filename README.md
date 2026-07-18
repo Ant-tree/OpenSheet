@@ -63,19 +63,43 @@ The status bar shows the live **count · sum · average** of the current selecti
 ## Mobile app (Android / iOS)
 
 The UI is responsive and works in mobile browsers. To ship it as a native app,
-the repo is configured for [Capacitor](https://capacitorjs.com/):
+the repo is configured for [Capacitor](https://capacitorjs.com/). The generated
+`android/` and `ios/` projects are already committed, so you can go straight to
+building — or regenerate them from scratch.
+
+**One-time setup** (only if `android/` or `ios/` is missing):
 
 ```bash
 npm install
-npx cap add android          # and/or: npx cap add ios  (needs Android Studio / Xcode + CocoaPods)
-npm run cap:android          # builds, syncs, and opens Android Studio (npm run cap:ios for Xcode)
+npx cap add android          # Android Studio required
+npx cap add ios              # Xcode required (Capacitor 8 uses Swift Package Manager — no CocoaPods needed)
 ```
 
-Then Run/Archive from Android Studio or Xcode to produce the `.apk` / `.ipa`.
-`npm run cap:sync` rebuilds and copies the web bundle into the native projects.
+**Build & run:**
 
-> Note: **Save in place** (File System Access API) is desktop-Chromium only. On
-> mobile, opening uses the system file picker and saving downloads a copy.
+```bash
+npm run cap:android          # builds the web app, syncs, and opens Android Studio
+npm run cap:ios              # ...and opens Xcode
+```
+
+Then press Run (device/emulator) or Archive to produce the `.apk` / `.ipa`. After
+changing web code, run `npm run cap:sync` (or the `cap:*` scripts, which sync for you).
+
+**App identity & assets:**
+
+- App id (Android `applicationId` / iOS bundle id): `dev.anttree.opensheet` — change it
+  in [`capacitor.config.ts`](capacitor.config.ts) (and the native projects) before publishing.
+- Icons & splash source art lives in [`assets/`](assets). After editing it, regenerate all
+  sizes with:
+  ```bash
+  npx capacitor-assets generate --ios --android
+  ```
+
+> Notes:
+> - Android builds need **JDK 17+**; Android Studio bundles a suitable one (the Capacitor
+>   CLI may warn about an older system JDK — opening the project in Android Studio resolves it).
+> - **Save in place** (File System Access API) is desktop-Chromium only. On mobile, opening
+>   uses the system file picker and saving downloads a copy.
 
 ## Tech stack
 

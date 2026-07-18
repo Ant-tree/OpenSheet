@@ -60,20 +60,42 @@ npm run preview  # 빌드 결과 미리보기
 
 ## 모바일 앱 (안드로이드 / iOS)
 
-UI가 반응형이라 모바일 브라우저에서 바로 동작합니다. 네이티브 앱으로 패키징하려면
-[Capacitor](https://capacitorjs.com/) 설정이 되어 있습니다:
+UI가 반응형이라 모바일 브라우저에서 바로 동작합니다. 네이티브 앱 패키징은
+[Capacitor](https://capacitorjs.com/)로 구성돼 있고, `android/`·`ios/` 프로젝트가 이미
+커밋되어 있어 바로 빌드할 수 있습니다(필요하면 새로 생성도 가능).
+
+**최초 1회 설정** (`android/`·`ios/`가 없을 때만):
 
 ```bash
 npm install
-npx cap add android          # 또는: npx cap add ios  (Android Studio / Xcode + CocoaPods 필요)
-npm run cap:android          # 빌드·동기화 후 Android Studio 열기 (iOS는 npm run cap:ios)
+npx cap add android          # Android Studio 필요
+npx cap add ios              # Xcode 필요 (Capacitor 8은 Swift Package Manager 사용 — CocoaPods 불필요)
 ```
 
-이후 Android Studio 또는 Xcode에서 Run/Archive 하면 `.apk` / `.ipa`가 생성됩니다.
-`npm run cap:sync`는 웹 빌드를 다시 만들어 네이티브 프로젝트에 복사합니다.
+**빌드 & 실행:**
 
-> 참고: **원본에 저장**(File System Access API)은 데스크톱 크로미엄 전용입니다. 모바일에서는
-> 열기는 시스템 파일 선택기를 쓰고, 저장은 사본 다운로드로 동작합니다.
+```bash
+npm run cap:android          # 웹 빌드 → 동기화 → Android Studio 열기
+npm run cap:ios              # → Xcode 열기
+```
+
+이후 Run(기기/에뮬레이터) 또는 Archive로 `.apk` / `.ipa`를 만듭니다. 웹 코드를 수정한
+뒤에는 `npm run cap:sync`(또는 위 `cap:*` 스크립트가 동기화까지 수행).
+
+**앱 식별자 & 리소스:**
+
+- 앱 ID(안드로이드 `applicationId` / iOS 번들 ID): `dev.anttree.opensheet` — 배포 전
+  [`capacitor.config.ts`](capacitor.config.ts)(및 네이티브 프로젝트)에서 변경하세요.
+- 아이콘·스플래시 원본은 [`assets/`](assets)에 있습니다. 수정 후 모든 크기를 다시 생성하려면:
+  ```bash
+  npx capacitor-assets generate --ios --android
+  ```
+
+> 참고:
+> - 안드로이드 빌드는 **JDK 17+** 가 필요합니다. Android Studio가 자체 JDK를 포함하므로
+>   (CLI가 구형 시스템 JDK 경고를 내도) Android Studio에서 열면 해결됩니다.
+> - **원본에 저장**(File System Access API)은 데스크톱 크로미엄 전용입니다. 모바일에서는
+>   열기는 시스템 파일 선택기를, 저장은 사본 다운로드로 동작합니다.
 
 ## 기술 스택
 
