@@ -26,7 +26,9 @@ function Dropdown({
   children: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
@@ -35,14 +37,27 @@ function Dropdown({
     window.addEventListener('mousedown', onDown)
     return () => window.removeEventListener('mousedown', onDown)
   }, [open])
+  // The menu is position:fixed so it escapes the toolbar's horizontal-scroll
+  // overflow clipping on mobile; anchor it under the trigger button.
+  const toggle = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 4, left: r.left })
+    }
+    setOpen((o) => !o)
+  }
   return (
     <div className="dropdown" ref={ref}>
-      <button className="tbtn" title={title} onClick={() => setOpen((o) => !o)}>
+      <button ref={btnRef} className="tbtn" title={title} onClick={toggle}>
         {trigger}
         <Icon name="chevron-down" className="caret" />
       </button>
-      {open && (
-        <div className="dropdown-menu" onClick={() => setOpen(false)}>
+      {open && pos && (
+        <div
+          className="dropdown-menu"
+          style={{ top: pos.top, left: pos.left }}
+          onClick={() => setOpen(false)}
+        >
           {children}
         </div>
       )}
