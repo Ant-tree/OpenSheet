@@ -10,6 +10,8 @@ export interface ImportedSheet {
   merges: MergeRange[]
   /** Per-cell formatting keyed by "row,col" (0-based). */
   formats: Record<string, CellFormat>
+  /** Per-cell notes keyed by "row,col" (0-based). */
+  notes: Record<string, string>
   /** Custom column widths in px, keyed by col index. */
   colWidths: Record<number, number>
   /** Custom row heights in px, keyed by row index. */
@@ -161,6 +163,7 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
   wb.eachSheet((ws) => {
     const rows: (string | number | boolean | null)[][] = []
     const formats: Record<string, CellFormat> = {}
+    const notes: Record<string, string> = {}
     const colWidths: Record<number, number> = {}
     const rowHeights: Record<number, number> = {}
 
@@ -174,6 +177,8 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
         row.push(cellToInput(cell))
         const fmt = readCellFormat(cell)
         if (fmt) formats[`${r - 1},${c - 1}`] = fmt
+        const note = readNote(cell)
+        if (note) notes[`${r - 1},${c - 1}`] = note
       }
       rows.push(row)
       const rh = ws.getRow(r).height
@@ -192,7 +197,7 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
     const frozenRows = frozen ? view?.ySplit ?? 0 : 0
     const frozenCols = frozen ? view?.xSplit ?? 0 : 0
 
-    sheets.push({ name: ws.name, rows, merges, formats, colWidths, rowHeights, frozenRows, frozenCols })
+    sheets.push({ name: ws.name, rows, merges, formats, notes, colWidths, rowHeights, frozenRows, frozenCols })
   })
 
   return { fileName: file.name, sheets }
@@ -264,6 +269,16 @@ function readCellFormat(cell: ExcelJS.Cell): CellFormat | undefined {
   return Object.keys(fmt).length ? fmt : undefined
 }
 
+/** Read a cell comment/note as plain text (exceljs stores it as a string or rich-text). */
+function readNote(cell: ExcelJS.Cell): string | undefined {
+  const note = (cell as unknown as { note?: unknown }).note
+  if (!note) return undefined
+  if (typeof note === 'string') return note.trim() || undefined
+  const texts = (note as { texts?: { text: string }[] }).texts
+  if (texts) return texts.map((tn) => tn.text).join('').trim() || undefined
+  return undefined
+}
+
 function readBorders(border: Partial<ExcelJS.Borders> | undefined): CellBorders | undefined {
   if (!border) return undefined
   const out: CellBorders = {}
@@ -325,6 +340,7 @@ function csvToSheet(fileName: string, text: string): ImportedSheet {
     rows,
     merges: [],
     formats: {},
+    notes: {},
     colWidths: {},
     rowHeights: {},
     frozenRows: 0,
@@ -508,6 +524,10 @@ export function buildWorkbook(
         // a union and write it onto the master so the whole box survives.
         const union = mergedUnionBorders(meta.formats, m)
         if (union) ws.getCell(m.top + 1, m.left + 1).border = toExcelBorders(union)
+      }
+      for (const [k, text] of Object.entries(meta.notes)) {
+        const [r, c] = k.split(',').map(Number)
+        ;(ws.getCell(r + 1, c + 1) as unknown as { note: string }).note = text
       }
       if (meta.frozenRows || meta.frozenCols) {
         ws.views = [{ state: 'frozen', xSplit: meta.frozenCols, ySplit: meta.frozenRows }]

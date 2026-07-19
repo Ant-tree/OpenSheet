@@ -58,6 +58,20 @@ export default function ContextMenu({
     if (text) store.pasteText(text)
   }
 
+  const focus = useStore.getState().selection.focus
+  const hasNote = !!useStore.getState().getNote(focus.row, focus.col)
+  const editNote = () => {
+    const store = useStore.getState()
+    const { row, col } = store.selection.focus
+    const current = store.getNote(row, col) ?? ''
+    const next = window.prompt(t('notePrompt'), current)
+    if (next !== null) store.setNote(row, col, next)
+  }
+  const deleteNote = () => {
+    const { row, col } = useStore.getState().selection.focus
+    useStore.getState().setNote(row, col, '')
+  }
+
   // Keep the menu on-screen.
   const left = Math.min(x, window.innerWidth - 210)
   const top = Math.min(y, window.innerHeight - 380)
@@ -120,6 +134,15 @@ export default function ContextMenu({
       <button className="menu-item" onClick={run(() => useStore.getState().unmergeSelection())}>
         {t('unmerge')}
       </button>
+      <div className="menu-sep" />
+      <button className="menu-item" onClick={run(editNote)}>
+        {hasNote ? t('editNote') : t('addNote')}
+      </button>
+      {hasNote && (
+        <button className="menu-item" onClick={run(deleteNote)}>
+          {t('deleteNote')}
+        </button>
+      )}
     </div>,
     document.body,
   )

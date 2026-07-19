@@ -55,6 +55,8 @@ export interface SheetMeta {
   name: string
   /** Per-cell formatting keyed by "row,col". */
   formats: Record<string, CellFormat>
+  /** Per-cell notes/comments keyed by "row,col". */
+  notes: Record<string, string>
   merges: MergeRange[]
   /** Custom column widths keyed by col index. */
   colWidths: Record<number, number>

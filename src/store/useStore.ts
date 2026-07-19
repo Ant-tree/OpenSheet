@@ -22,6 +22,7 @@ export interface SerializedDoc {
     name: string
     contents: CellValue[][]
     formats: Record<string, CellFormat>
+    notes: Record<string, string>
     merges: MergeRange[]
     colWidths: Record<number, number>
     rowHeights: Record<number, number>
@@ -65,6 +66,7 @@ interface StoreState {
   getRaw: (row: number, col: number) => string
   getComputed: (row: number, col: number) => unknown
   getFormat: (row: number, col: number) => CellFormat | undefined
+  getNote: (row: number, col: number) => string | undefined
   activeSheet: () => SheetMeta
 
   // --- mutations ---
@@ -76,6 +78,8 @@ interface StoreState {
   applyFormat: (patch: Partial<CellFormat>) => void
   applyBorders: (preset: BorderPreset) => void
   clearSelectedContents: () => void
+  /** Set (or clear, when text is empty) the note on a cell. */
+  setNote: (row: number, col: number, text: string) => void
 
   mergeSelection: () => void
   unmergeSelection: () => void
@@ -119,6 +123,7 @@ interface StoreState {
       rows: (string | number | boolean | null)[][]
       merges?: MergeRange[]
       formats?: Record<string, CellFormat>
+      notes?: Record<string, string>
       colWidths?: Record<number, number>
       rowHeights?: Record<number, number>
       frozenRows?: number
@@ -138,7 +143,7 @@ function buildInitial(): { hf: HyperFormula; sheets: SheetMeta[]; activeSheetId:
   hf.addSheet(name)
   const id = hf.getSheetId(name)!
   const sheets: SheetMeta[] = [
-    { id, name, formats: {}, merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 },
+    { id, name, formats: {}, notes: {}, merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 },
   ]
   return { hf, sheets, activeSheetId: id }
 }
@@ -176,6 +181,10 @@ export const useStore = create<StoreState>((set, get) => {
 
     getFormat(row, col) {
       return get().activeSheet().formats[key(row, col)]
+    },
+
+    getNote(row, col) {
+      return get().activeSheet().notes[key(row, col)]
     },
 
     setCellContent(row, col, raw) {
@@ -264,6 +273,17 @@ export const useStore = create<StoreState>((set, get) => {
       for (const ref of iterateSelection(selection)) {
         hf.setCellContents({ sheet: activeSheetId, row: ref.row, col: ref.col }, null)
       }
+      bump(set)
+    },
+
+    setNote(row, col, text) {
+      pushUndo(set, get)
+      const sheet = get().activeSheet()
+      const notes = { ...sheet.notes }
+      const k = key(row, col)
+      if (text.trim()) notes[k] = text
+      else delete notes[k]
+      updateSheet(set, get, sheet.id, { notes })
       bump(set)
     },
 
@@ -362,7 +382,8 @@ export const useStore = create<StoreState>((set, get) => {
       get().hf.addRows(sheet.id, [at, count])
       const map = (i: number) => (i >= at ? i + count : i)
       updateSheet(set, get, sheet.id, {
-        formats: shiftFormats(sheet.formats, 'row', map),
+        formats: shiftKeyed(sheet.formats, 'row', map),
+        notes: shiftKeyed(sheet.notes, 'row', map),
         rowHeights: shiftSizes(sheet.rowHeights, map),
         merges: shiftMergesInsert(sheet.merges, 'row', at, count),
       })
@@ -375,7 +396,8 @@ export const useStore = create<StoreState>((set, get) => {
       get().hf.removeRows(sheet.id, [at, count])
       const map = (i: number) => (i < at ? i : i < at + count ? null : i - count)
       updateSheet(set, get, sheet.id, {
-        formats: shiftFormats(sheet.formats, 'row', map),
+        formats: shiftKeyed(sheet.formats, 'row', map),
+        notes: shiftKeyed(sheet.notes, 'row', map),
         rowHeights: shiftSizes(sheet.rowHeights, map),
         merges: shiftMergesDelete(sheet.merges, 'row', at, count),
       })
@@ -388,7 +410,8 @@ export const useStore = create<StoreState>((set, get) => {
       get().hf.addColumns(sheet.id, [at, count])
       const map = (i: number) => (i >= at ? i + count : i)
       updateSheet(set, get, sheet.id, {
-        formats: shiftFormats(sheet.formats, 'col', map),
+        formats: shiftKeyed(sheet.formats, 'col', map),
+        notes: shiftKeyed(sheet.notes, 'col', map),
         colWidths: shiftSizes(sheet.colWidths, map),
         merges: shiftMergesInsert(sheet.merges, 'col', at, count),
       })
@@ -401,7 +424,8 @@ export const useStore = create<StoreState>((set, get) => {
       get().hf.removeColumns(sheet.id, [at, count])
       const map = (i: number) => (i < at ? i : i < at + count ? null : i - count)
       updateSheet(set, get, sheet.id, {
-        formats: shiftFormats(sheet.formats, 'col', map),
+        formats: shiftKeyed(sheet.formats, 'col', map),
+        notes: shiftKeyed(sheet.notes, 'col', map),
         colWidths: shiftSizes(sheet.colWidths, map),
         merges: shiftMergesDelete(sheet.merges, 'col', at, count),
       })
@@ -429,6 +453,7 @@ export const useStore = create<StoreState>((set, get) => {
           name: m.name,
           contents: hf.getSheetSerialized(m.id) as CellValue[][],
           formats: m.formats,
+          notes: m.notes,
           merges: m.merges,
           colWidths: m.colWidths,
           rowHeights: m.rowHeights,
@@ -447,6 +472,7 @@ export const useStore = create<StoreState>((set, get) => {
         id: hf.getSheetId(s.name)!,
         name: s.name,
         formats: s.formats ?? {},
+        notes: s.notes ?? {},
         merges: s.merges ?? [],
         colWidths: s.colWidths ?? {},
         rowHeights: s.rowHeights ?? {},
@@ -475,7 +501,7 @@ export const useStore = create<StoreState>((set, get) => {
       hf.addSheet(name)
       const id = hf.getSheetId(name)!
       set({
-        sheets: [...sheets, { id, name, formats: {}, merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 }],
+        sheets: [...sheets, { id, name, formats: {}, notes: {}, merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 }],
         activeSheetId: id,
         selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
         past: [],
@@ -527,6 +553,7 @@ export const useStore = create<StoreState>((set, get) => {
         id: hf.getSheetId(s.name)!,
         name: s.name,
         formats: s.formats ?? {},
+        notes: s.notes ?? {},
         merges: s.merges ?? [],
         colWidths: s.colWidths ?? {},
         rowHeights: s.rowHeights ?? {},
@@ -774,6 +801,7 @@ function cloneMeta(m: SheetMeta): SheetMeta {
     id: m.id,
     name: m.name,
     formats: structuredClone(m.formats),
+    notes: { ...m.notes },
     merges: m.merges.map((x) => ({ ...x })),
     colWidths: { ...m.colWidths },
     rowHeights: { ...m.rowHeights },
@@ -814,18 +842,18 @@ function overlaps(a: MergeRange, b: MergeRange): boolean {
 // --- row/column insert/delete: shift metadata keyed by index ---
 type IndexMap = (i: number) => number | null
 
-function shiftFormats(
-  formats: Record<string, CellFormat>,
+function shiftKeyed<T>(
+  rec: Record<string, T>,
   axis: 'row' | 'col',
   map: IndexMap,
-): Record<string, CellFormat> {
-  const out: Record<string, CellFormat> = {}
-  for (const k in formats) {
+): Record<string, T> {
+  const out: Record<string, T> = {}
+  for (const k in rec) {
     const [r, c] = k.split(',').map(Number)
     const nr = axis === 'row' ? map(r) : r
     const nc = axis === 'col' ? map(c) : c
     if (nr === null || nc === null) continue
-    out[`${nr},${nc}`] = formats[k]
+    out[`${nr},${nc}`] = rec[k]
   }
   return out
 }

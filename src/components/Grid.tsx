@@ -517,6 +517,7 @@ export default function Grid() {
                   !selected
                 const isFillCorner = !isEditing && r === bounds.bottom && c === bounds.right
                 const fmt = sheet.formats[k]
+                const note = sheet.notes[k]
                 const computed = useStore.getState().getComputed(r, c)
                 const text = displayValue(computed, fmt)
                 const isNum = typeof computed === 'number'
@@ -539,7 +540,7 @@ export default function Grid() {
                   if (bd.bottom) style.borderBottom = borderCss(bd.bottom)
                   if (bd.right) style.borderRight = borderCss(bd.right)
                 }
-                if (isFillCorner) style.position = 'relative'
+                if (isFillCorner || note) style.position = 'relative'
                 const frozenR = r < frozenRows
                 const frozenC = c < frozenCols
                 if (frozenR || frozenC) {
@@ -592,6 +593,7 @@ export default function Grid() {
                     ) : (
                       text
                     )}
+                    {note && <span className="note-marker" title={note} />}
                     {isFillCorner && (
                       <div className="fill-handle" onMouseDown={onFillStart} />
                     )}

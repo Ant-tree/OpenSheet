@@ -425,6 +425,17 @@ table.grid {
 .cell.fill-preview {
   background: rgba(26, 115, 232, 0.07);
 }
+/* Small red triangle in the corner marking a cell note. */
+.note-marker {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-top: 7px solid #d93025;
+  border-left: 7px solid transparent;
+  z-index: 2;
+}
 .fill-handle {
   position: absolute;
   right: -3px;
