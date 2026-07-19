@@ -80,3 +80,28 @@ export function replaceCaseInsensitive(str: string, find: string, repl: string):
   const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return str.replace(new RegExp(escaped, 'gi'), repl)
 }
+
+/** Column index (0-based) from letters, e.g. "A"->0, "AB"->27. */
+export function colFromLetters(letters: string): number {
+  let n = 0
+  for (const ch of letters.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64)
+  return n - 1
+}
+
+/** Shift relative row & column references in a formula by (dRow, dCol). */
+export function shiftFormulaRefs(formula: string, dRow: number, dCol: number): string {
+  return formula.replace(/(\$?)([A-Za-z]+)(\$?)(\d+)/g, (m, colAbs, col, rowAbs, rowNum) => {
+    let newCol = col
+    let newRow = Number(rowNum)
+    if (!colAbs && dCol) {
+      const idx = colFromLetters(col) + dCol
+      if (idx < 0) return m
+      newCol = colToLetter(idx)
+    }
+    if (!rowAbs && dRow) {
+      newRow += dRow
+      if (newRow < 1) return m
+    }
+    return `${colAbs}${newCol}${rowAbs}${newRow}`
+  })
+}

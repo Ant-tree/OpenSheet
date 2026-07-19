@@ -6,6 +6,7 @@ import {
   key,
   replaceCaseInsensitive,
   selectionBounds,
+  shiftFormulaRefs,
   shiftFormulaRowRefs,
 } from '../lib/utils'
 import { detectLang, t } from '../i18n'
@@ -83,6 +84,8 @@ interface StoreState {
   internalClipboardText: () => string | null
   /** Replace every occurrence of `find` with `repl` across the active sheet; returns match count. */
   replaceAll: (find: string, repl: string) => number
+  /** Auto-fill: extend the `src` block over `tgt` (series for numbers, else copy). */
+  fillRange: (src: MergeRange, tgt: MergeRange) => void
 
   setFileHandle: (handle: FileSystemFileHandle | null) => void
 
@@ -528,6 +531,96 @@ export const useStore = create<StoreState>((set, get) => {
 
     internalClipboardText() {
       return clipboard ? clipboard.rows.map((r) => r.join('\t')).join('\n') : null
+    },
+
+    fillRange(src, tgt) {
+      const { hf, activeSheetId } = get()
+      const sheet = get().activeSheet()
+      const vertical = tgt.top < src.top || tgt.bottom > src.bottom
+      const srcH = src.bottom - src.top + 1
+      const srcW = src.right - src.left + 1
+      const readRaw = (r: number, c: number) => {
+        const v = hf.getCellSerialized({ sheet: activeSheetId, row: r, col: c })
+        return v === null || v === undefined ? null : String(v)
+      }
+      const setRaw = (r: number, c: number, val: string | number | null) =>
+        hf.setCellContents({ sheet: activeSheetId, row: r, col: c }, val)
+      const formats = { ...sheet.formats }
+      const applyFmt = (tr: number, tc: number, sr: number, sc: number) => {
+        const f = sheet.formats[key(sr, sc)]
+        if (f) formats[key(tr, tc)] = { ...f }
+        else delete formats[key(tr, tc)]
+      }
+      const mod = (n: number, m: number) => ((n % m) + m) % m
+      pushUndo(set, get)
+
+      const fillLine = (
+        srcVals: (string | null)[],
+        targets: number[],
+        loStart: number,
+        hiStart: number,
+        at: (i: number) => { r: number; c: number; sIdx: number },
+        dRC: (i: number, sIdx: number) => [number, number],
+      ) => {
+        const allNum =
+          srcVals.length > 0 && srcVals.every((v) => v !== null && v !== '' && !isNaN(Number(v)))
+        const nums = allNum ? srcVals.map(Number) : []
+        const step = nums.length > 1 ? (nums[nums.length - 1] - nums[0]) / (nums.length - 1) : 0
+        for (const i of targets) {
+          const { r, c, sIdx } = at(i)
+          if (allNum) {
+            const val = i > hiStart ? nums[nums.length - 1] + step * (i - hiStart) : nums[0] - step * (loStart - i)
+            setRaw(r, c, val)
+          } else {
+            const raw = srcVals[sIdx]
+            const [dR, dC] = dRC(i, sIdx)
+            const val = raw && raw.startsWith('=') ? '=' + shiftFormulaRefs(raw.slice(1), dR, dC) : raw
+            setRaw(r, c, val)
+          }
+        }
+      }
+
+      if (vertical) {
+        for (let c = src.left; c <= src.right; c++) {
+          const srcVals: (string | null)[] = []
+          for (let r = src.top; r <= src.bottom; r++) srcVals.push(readRaw(r, c))
+          const targets: number[] = []
+          for (let r = tgt.top; r <= tgt.bottom; r++) if (r < src.top || r > src.bottom) targets.push(r)
+          fillLine(
+            srcVals,
+            targets,
+            src.top,
+            src.bottom,
+            (r) => {
+              const sIdx = mod(r - src.top, srcH)
+              applyFmt(r, c, src.top + sIdx, c)
+              return { r, c, sIdx }
+            },
+            (r, sIdx) => [r - (src.top + sIdx), 0],
+          )
+        }
+      } else {
+        for (let r = src.top; r <= src.bottom; r++) {
+          const srcVals: (string | null)[] = []
+          for (let c = src.left; c <= src.right; c++) srcVals.push(readRaw(r, c))
+          const targets: number[] = []
+          for (let c = tgt.left; c <= tgt.right; c++) if (c < src.left || c > src.right) targets.push(c)
+          fillLine(
+            srcVals,
+            targets,
+            src.left,
+            src.right,
+            (c) => {
+              const sIdx = mod(c - src.left, srcW)
+              applyFmt(r, c, r, src.left + sIdx)
+              return { r, c, sIdx }
+            },
+            (c, sIdx) => [0, c - (src.left + sIdx)],
+          )
+        }
+      }
+      updateSheet(set, get, sheet.id, { formats })
+      bump(set)
     },
 
     replaceAll(find, repl) {

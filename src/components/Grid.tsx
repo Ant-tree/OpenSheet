@@ -94,6 +94,11 @@ export default function Grid() {
   const refRange = useRef<{ start: number; end: number } | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const longPress = useRef<number | null>(null)
+  // Fill handle (auto-fill by dragging the selection's bottom-right corner).
+  const [fillTarget, setFillTarget] = useState<MergeRange | null>(null)
+  const filling = useRef(false)
+  const fillSource = useRef<MergeRange | null>(null)
+  const fillTargetRef = useRef<MergeRange | null>(null)
 
   // Build lookup of merge coverage for the active sheet.
   const { covered, anchorOf } = useMemo(() => {
@@ -278,7 +283,28 @@ export default function Grid() {
     dragging.current = true
     // Focus follows the active cell's input via a layout effect on selection.
   }
+  const onFillStart = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const b = selectionBounds(useStore.getState().selection)
+    fillSource.current = b
+    fillTargetRef.current = b
+    filling.current = true
+    setFillTarget(b)
+  }
   const onCellMouseEnter = (row: number, col: number) => {
+    if (filling.current && fillSource.current) {
+      const src = fillSource.current
+      const dRow = row < src.top ? row - src.top : row > src.bottom ? row - src.bottom : 0
+      const dCol = col < src.left ? col - src.left : col > src.right ? col - src.right : 0
+      const tgt: MergeRange =
+        Math.abs(dRow) >= Math.abs(dCol)
+          ? { top: Math.min(src.top, row), bottom: Math.max(src.bottom, row), left: src.left, right: src.right }
+          : { top: src.top, bottom: src.bottom, left: Math.min(src.left, col), right: Math.max(src.right, col) }
+      fillTargetRef.current = tgt
+      setFillTarget(tgt)
+      return
+    }
     if (pointAnchor.current) {
       insertRef(rangeA1(pointAnchor.current, { row, col })) // drag to extend the referenced range
       return
@@ -289,6 +315,28 @@ export default function Grid() {
   }
   useEffect(() => {
     const up = () => {
+      if (filling.current) {
+        const src = fillSource.current
+        const tgt = fillTargetRef.current
+        if (
+          src &&
+          tgt &&
+          (tgt.top !== src.top ||
+            tgt.bottom !== src.bottom ||
+            tgt.left !== src.left ||
+            tgt.right !== src.right)
+        ) {
+          useStore.getState().fillRange(src, tgt)
+          useStore.getState().setSelection({
+            anchor: { row: tgt.top, col: tgt.left },
+            focus: { row: tgt.bottom, col: tgt.right },
+          })
+        }
+        filling.current = false
+        fillSource.current = null
+        fillTargetRef.current = null
+        setFillTarget(null)
+      }
       dragging.current = false
       pointAnchor.current = null // end the drag; the ref stays replaceable until a keystroke
     }
@@ -428,6 +476,14 @@ export default function Grid() {
                 const isEditing = editing?.row === r && editing?.col === c
                 const isActive = selection.focus.row === r && selection.focus.col === c
                 const selected = isInSelection(r, c, selection)
+                const inFill =
+                  !!fillTarget &&
+                  r >= fillTarget.top &&
+                  r <= fillTarget.bottom &&
+                  c >= fillTarget.left &&
+                  c <= fillTarget.right &&
+                  !selected
+                const isFillCorner = !isEditing && r === bounds.bottom && c === bounds.right
                 const fmt = sheet.formats[k]
                 const computed = useStore.getState().getComputed(r, c)
                 const text = displayValue(computed, fmt)
@@ -449,6 +505,7 @@ export default function Grid() {
                   if (bd.bottom) style.borderBottom = borderCss(bd.bottom)
                   if (bd.right) style.borderRight = borderCss(bd.right)
                 }
+                if (isFillCorner) style.position = 'relative'
 
                 return (
                   <td
@@ -456,8 +513,8 @@ export default function Grid() {
                     rowSpan={merge ? merge.bottom - merge.top + 1 : undefined}
                     colSpan={merge ? merge.right - merge.left + 1 : undefined}
                     className={`cell${selected ? ' selected' : ''}${isActive ? ' active' : ''}${
-                      isNum && !fmt?.align ? ' num' : ''
-                    }`}
+                      inFill ? ' fill-preview' : ''
+                    }${isNum && !fmt?.align ? ' num' : ''}`}
                     style={style}
                     data-r={r}
                     data-c={c}
@@ -482,6 +539,9 @@ export default function Grid() {
                       </>
                     ) : (
                       text
+                    )}
+                    {isFillCorner && (
+                      <div className="fill-handle" onMouseDown={onFillStart} />
                     )}
                   </td>
                 )
