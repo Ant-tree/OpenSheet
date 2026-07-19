@@ -14,11 +14,15 @@ export interface CellBorders {
   left?: BorderSide
 }
 
+export type VAlign = 'top' | 'middle' | 'bottom'
+
 export interface CellFormat {
   bold?: boolean
   italic?: boolean
   underline?: boolean
   align?: HAlign
+  valign?: VAlign
+  wrap?: boolean
   color?: string // text color, e.g. "#d93025"
   bgColor?: string // background fill
   /** A number-format token understood by formatNumber(): e.g. "0.00", "#,##0", "0%", "$#,##0.00", "yyyy-mm-dd" */

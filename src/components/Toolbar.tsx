@@ -325,6 +325,37 @@ export default function Toolbar() {
       </div>
 
       <div className="group">
+        <button
+          className={`tbtn icon-btn${active?.valign === 'top' ? ' active' : ''}`}
+          title={t('alignTop')}
+          onClick={() => applyFormat({ valign: 'top' })}
+        >
+          <Icon name="valign-top" />
+        </button>
+        <button
+          className={`tbtn icon-btn${active?.valign === 'middle' ? ' active' : ''}`}
+          title={t('alignMiddle')}
+          onClick={() => applyFormat({ valign: 'middle' })}
+        >
+          <Icon name="valign-middle" />
+        </button>
+        <button
+          className={`tbtn icon-btn${active?.valign === 'bottom' ? ' active' : ''}`}
+          title={t('alignBottom')}
+          onClick={() => applyFormat({ valign: 'bottom' })}
+        >
+          <Icon name="valign-bottom" />
+        </button>
+        <button
+          className={`tbtn icon-btn${active?.wrap ? ' active' : ''}`}
+          title={t('wrapText')}
+          onClick={() => applyFormat({ wrap: !active?.wrap })}
+        >
+          <Icon name="wrap" />
+        </button>
+      </div>
+
+      <div className="group">
         <label className="color-field" title={t('textColor')}>
           <Icon name="text-color" />
           <input

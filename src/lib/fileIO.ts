@@ -250,6 +250,9 @@ function readCellFormat(cell: ExcelJS.Cell): CellFormat | undefined {
 
   const h = cell.alignment?.horizontal
   if (h === 'left' || h === 'center' || h === 'right') fmt.align = h as HAlign
+  const v = cell.alignment?.vertical
+  if (v === 'top' || v === 'middle' || v === 'bottom') fmt.valign = v
+  if (cell.alignment?.wrapText) fmt.wrap = true
 
   const numFmt = cell.numFmt
   if (numFmt && numFmt !== 'General') fmt.numberFormat = numFmt
@@ -571,7 +574,13 @@ function applyFormatToCell(cell: ExcelJS.Cell, fmt: CellFormat) {
       fgColor: { argb: hexToArgb(fmt.bgColor) },
     }
   }
-  if (fmt.align) cell.alignment = { horizontal: fmt.align }
+  if (fmt.align || fmt.valign || fmt.wrap) {
+    cell.alignment = {
+      ...(fmt.align ? { horizontal: fmt.align } : {}),
+      ...(fmt.valign ? { vertical: fmt.valign } : {}),
+      ...(fmt.wrap ? { wrapText: true } : {}),
+    }
+  }
   if (fmt.numberFormat && fmt.numberFormat !== 'General') cell.numFmt = fmt.numberFormat
   if (fmt.borders) cell.border = toExcelBorders(fmt.borders)
 }

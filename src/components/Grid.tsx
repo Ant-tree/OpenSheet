@@ -529,6 +529,8 @@ export default function Grid() {
                   if (fmt.color) style.color = fmt.color
                   if (fmt.bgColor) style.background = fmt.bgColor
                   if (fmt.align) style.textAlign = fmt.align
+                  if (fmt.valign) style.verticalAlign = fmt.valign
+                  if (fmt.wrap) style.whiteSpace = 'normal'
                 }
                 {
                   const bd = resolveBorders(sheet.formats, merge, r, c)
@@ -568,7 +570,14 @@ export default function Grid() {
                   >
                     {isActive ? (
                       <>
-                        {!isEditing && <span className="cell-text">{text}</span>}
+                        {!isEditing && (
+                          <span
+                            className="cell-text"
+                            style={fmt?.wrap ? { whiteSpace: 'normal' } : undefined}
+                          >
+                            {text}
+                          </span>
+                        )}
                         <input
                           ref={inputRef}
                           className={`cell-input${isEditing ? ' editing' : ''}`}
