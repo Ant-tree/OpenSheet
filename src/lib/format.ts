@@ -115,6 +115,38 @@ export function formatNumber(value: number, token: string | undefined): string {
   return `${sign}${currency}${out}${suffix}`
 }
 
+function currentDecimals(token?: string): number {
+  if (!token || token === 'General') return 0
+  return decimalsOf(token.split(';')[0])
+}
+
+/** Build a number format with `n` decimals, preserving currency/percent/thousands. */
+export function withDecimals(token: string | undefined, n: number): string {
+  const clamped = Math.max(0, Math.min(n, 10))
+  const t = token && token !== 'General' ? token : ''
+  const currency = CURRENCY_RE.exec(t)?.[0] ?? ''
+  const percent = t.includes('%')
+  const thousands = t.includes(',') || currency !== ''
+  const intPart = thousands ? '#,##0' : '0'
+  const frac = clamped > 0 ? '.' + '0'.repeat(clamped) : ''
+  return `${currency}${intPart}${frac}${percent ? '%' : ''}` || 'General'
+}
+
+export const increaseDecimals = (token?: string) => withDecimals(token, currentDecimals(token) + 1)
+export const decreaseDecimals = (token?: string) => withDecimals(token, currentDecimals(token) - 1)
+
+/** Apply a currency format, keeping the current decimal count. */
+export function asCurrency(token?: string): string {
+  const d = currentDecimals(token)
+  return `₩#,##0${d > 0 ? '.' + '0'.repeat(d) : ''}`
+}
+
+/** Apply a percent format, keeping the current decimal count. */
+export function asPercent(token?: string): string {
+  const d = currentDecimals(token)
+  return `0${d > 0 ? '.' + '0'.repeat(d) : ''}%`
+}
+
 /** Classify any Excel format code into the closest toolbar preset token. */
 export function toPresetToken(code: string | undefined): string {
   if (!code || code === 'General') return 'General'

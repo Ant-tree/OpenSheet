@@ -9,7 +9,14 @@ import {
   saveToHandle,
   supportsFileSystemAccess,
 } from '../lib/fileIO'
-import { NUMBER_FORMAT_PRESETS, toPresetToken } from '../lib/format'
+import {
+  NUMBER_FORMAT_PRESETS,
+  asCurrency,
+  asPercent,
+  decreaseDecimals,
+  increaseDecimals,
+  toPresetToken,
+} from '../lib/format'
 import {
   addRecentFile,
   clearRecentFiles,
@@ -348,6 +355,34 @@ export default function Toolbar() {
             </option>
           ))}
         </select>
+        <button
+          className="tbtn icon-btn"
+          title={t('currencyFmt')}
+          onClick={() => applyFormat({ numberFormat: asCurrency(active?.numberFormat) })}
+        >
+          <Icon name="currency" />
+        </button>
+        <button
+          className="tbtn icon-btn"
+          title={t('percentFmt')}
+          onClick={() => applyFormat({ numberFormat: asPercent(active?.numberFormat) })}
+        >
+          <Icon name="percent" />
+        </button>
+        <button
+          className="tbtn icon-btn"
+          title={t('decimalInc')}
+          onClick={() => applyFormat({ numberFormat: increaseDecimals(active?.numberFormat) })}
+        >
+          <Icon name="decimal-inc" />
+        </button>
+        <button
+          className="tbtn icon-btn"
+          title={t('decimalDec')}
+          onClick={() => applyFormat({ numberFormat: decreaseDecimals(active?.numberFormat) })}
+        >
+          <Icon name="decimal-dec" />
+        </button>
       </div>
 
       <div className="group">
