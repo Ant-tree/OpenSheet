@@ -1,8 +1,17 @@
 import ExcelJS from 'exceljs'
 import type { HyperFormula } from 'hyperformula'
-import type { BorderSide, CellBorders, CellFormat, HAlign, MergeRange, SheetMeta } from '../types'
+import type {
+  BorderSide,
+  CellBorders,
+  CellFormat,
+  CondFormatRule,
+  HAlign,
+  MergeRange,
+  SheetMeta,
+} from '../types'
 import { t, useLangStore } from '../i18n'
 import { strongerBorder } from './format'
+import { opFromExcel, opToExcel } from './condFormat'
 
 export interface ImportedSheet {
   name: string
@@ -12,6 +21,8 @@ export interface ImportedSheet {
   formats: Record<string, CellFormat>
   /** Per-cell notes keyed by "row,col" (0-based). */
   notes: Record<string, string>
+  /** Conditional-formatting rules. */
+  condFormats: CondFormatRule[]
   /** Custom column widths in px, keyed by col index. */
   colWidths: Record<number, number>
   /** Custom row heights in px, keyed by row index. */
@@ -191,13 +202,14 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
     }
 
     const merges: MergeRange[] = readMerges(ws)
+    const condFormats: CondFormatRule[] = readCondFormats(ws)
 
     const view = (ws.views ?? [])[0] as { state?: string; xSplit?: number; ySplit?: number } | undefined
     const frozen = view?.state === 'frozen'
     const frozenRows = frozen ? view?.ySplit ?? 0 : 0
     const frozenCols = frozen ? view?.xSplit ?? 0 : 0
 
-    sheets.push({ name: ws.name, rows, merges, formats, notes, colWidths, rowHeights, frozenRows, frozenCols })
+    sheets.push({ name: ws.name, rows, merges, formats, notes, condFormats, colWidths, rowHeights, frozenRows, frozenCols })
   })
 
   return { fileName: file.name, sheets }
@@ -317,13 +329,68 @@ function readMerges(ws: ExcelJS.Worksheet): MergeRange[] {
   return merges
 }
 
-/** Decode "AB12" into 0-based {row, col}. */
+/** Decode "AB12" (with optional $ anchors) into 0-based {row, col}. */
 function decodeA1(a1: string): { row: number; col: number } | null {
-  const m = /^([A-Z]+)(\d+)$/.exec(a1.trim().toUpperCase())
+  const m = /^([A-Z]+)(\d+)$/.exec(a1.replace(/\$/g, '').trim().toUpperCase())
   if (!m) return null
   let col = 0
   for (const ch of m[1]) col = col * 26 + (ch.charCodeAt(0) - 64)
   return { row: parseInt(m[2], 10) - 1, col: col - 1 }
+}
+
+/** Decode an A1 range like "A1:C10" (or a single "A1") into a MergeRange. */
+function decodeA1Range(ref: string): MergeRange | null {
+  const [start, end] = ref.split(':')
+  const s = decodeA1(start)
+  const e = decodeA1(end ?? start)
+  if (!s || !e) return null
+  return {
+    top: Math.min(s.row, e.row),
+    left: Math.min(s.col, e.col),
+    bottom: Math.max(s.row, e.row),
+    right: Math.max(s.col, e.col),
+  }
+}
+
+/** exceljs conditional-formatting rule/style shapes (fields absent from its types). */
+type XlsxCfRule = {
+  type?: string
+  operator?: string
+  formulae?: unknown[]
+  text?: string
+  style?: { fill?: { bgColor?: XlsxColor; fgColor?: XlsxColor }; font?: { color?: XlsxColor } }
+}
+
+/** Read conditional-formatting rules we understand (cellIs comparisons, text-contains). */
+function readCondFormats(ws: ExcelJS.Worksheet): CondFormatRule[] {
+  const cfs = (ws as unknown as { conditionalFormattings?: { ref: string; rules: XlsxCfRule[] }[] })
+    .conditionalFormattings
+  if (!cfs) return []
+  const out: CondFormatRule[] = []
+  for (const cf of cfs) {
+    const range = decodeA1Range(cf.ref?.split(' ')[0] ?? '')
+    if (!range) continue
+    for (const rule of cf.rules ?? []) {
+      const bg = resolveColor(rule.style?.fill?.bgColor ?? rule.style?.fill?.fgColor)
+      if (!bg) continue
+      const color = resolveColor(rule.style?.font?.color)
+      if (rule.type === 'cellIs' && rule.operator) {
+        const op = opFromExcel(rule.operator)
+        if (!op) continue
+        out.push({
+          range,
+          op,
+          value1: String(rule.formulae?.[0] ?? ''),
+          value2: rule.formulae?.[1] != null ? String(rule.formulae[1]) : undefined,
+          bgColor: bg,
+          ...(color ? { color } : {}),
+        })
+      } else if (rule.type === 'containsText' && rule.text != null) {
+        out.push({ range, op: 'textContains', value1: String(rule.text), bgColor: bg, ...(color ? { color } : {}) })
+      }
+    }
+  }
+  return out
 }
 
 function csvToSheet(fileName: string, text: string): ImportedSheet {
@@ -341,6 +408,7 @@ function csvToSheet(fileName: string, text: string): ImportedSheet {
     merges: [],
     formats: {},
     notes: {},
+    condFormats: [],
     colWidths: {},
     rowHeights: {},
     frozenRows: 0,
@@ -529,6 +597,7 @@ export function buildWorkbook(
         const [r, c] = k.split(',').map(Number)
         ;(ws.getCell(r + 1, c + 1) as unknown as { note: string }).note = text
       }
+      writeCondFormats(ws, meta.condFormats)
       if (meta.frozenRows || meta.frozenCols) {
         ws.views = [{ state: 'frozen', xSplit: meta.frozenCols, ySplit: meta.frozenRows }]
       }
@@ -576,6 +645,46 @@ function toExcelBorders(borders: CellBorders): Partial<ExcelJS.Borders> {
   if (borders.bottom) border.bottom = side(borders.bottom)
   if (borders.left) border.left = side(borders.left)
   return border
+}
+
+function encodeCol(col: number): string {
+  let s = ''
+  let c = col + 1
+  while (c > 0) {
+    const m = (c - 1) % 26
+    s = String.fromCharCode(65 + m) + s
+    c = Math.floor((c - 1) / 26)
+  }
+  return s
+}
+
+function encodeA1Range(m: MergeRange): string {
+  return `${encodeCol(m.left)}${m.top + 1}:${encodeCol(m.right)}${m.bottom + 1}`
+}
+
+/** Write our conditional-formatting rules as exceljs cellIs / containsText rules. */
+function writeCondFormats(ws: ExcelJS.Worksheet, rules: CondFormatRule[]) {
+  if (!rules.length) return
+  let priority = 1
+  for (const rule of rules) {
+    const ref = encodeA1Range(rule.range)
+    const style: Record<string, unknown> = {
+      fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: hexToArgb(rule.bgColor) } },
+    }
+    if (rule.color) style.font = { color: { argb: hexToArgb(rule.color) } }
+    let cfRule: Record<string, unknown> | null = null
+    if (rule.op === 'textContains') {
+      cfRule = { type: 'containsText', operator: 'containsText', text: rule.value1, priority: priority++, style }
+    } else {
+      const operator = opToExcel(rule.op)
+      if (!operator) continue
+      const formulae = rule.op === 'between' ? [rule.value1, rule.value2 ?? ''] : [rule.value1]
+      cfRule = { type: 'cellIs', operator, formulae, priority: priority++, style }
+    }
+    ws.addConditionalFormatting({ ref, rules: [cfRule] } as unknown as Parameters<
+      ExcelJS.Worksheet['addConditionalFormatting']
+    >[0])
+  }
 }
 
 function applyFormatToCell(cell: ExcelJS.Cell, fmt: CellFormat) {

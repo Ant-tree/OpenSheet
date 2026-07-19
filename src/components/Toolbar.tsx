@@ -132,7 +132,7 @@ const BORDER_LABEL_KEYS = {
   none: 'borderNone',
 } as const
 
-export default function Toolbar() {
+export default function Toolbar({ onOpenCondFormat }: { onOpenCondFormat: () => void }) {
   const t = useT()
   const fileRef = useRef<HTMLInputElement>(null)
   const applyFormat = useStore((s) => s.applyFormat)
@@ -460,6 +460,13 @@ export default function Toolbar() {
         </button>
         <button className="tbtn" title={t('sortDesc')} onClick={() => sortSelection(false)}>
           <Icon name="sort-desc" />
+        </button>
+      </div>
+
+      <div className="group">
+        <button className="tbtn" title={t('condFormatHint')} onClick={onOpenCondFormat}>
+          <Icon name="cond-format" />
+          {t('condFormat')}
         </button>
       </div>
 

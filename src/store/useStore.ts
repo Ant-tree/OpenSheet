@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { HyperFormula } from 'hyperformula'
-import type { BorderSide, CellFormat, MergeRange, Selection, SheetMeta } from '../types'
+import type {
+  BorderSide,
+  CellFormat,
+  CondFormatRule,
+  MergeRange,
+  Selection,
+  SheetMeta,
+} from '../types'
 import {
   iterateSelection,
   key,
@@ -23,6 +30,7 @@ export interface SerializedDoc {
     contents: CellValue[][]
     formats: Record<string, CellFormat>
     notes: Record<string, string>
+    condFormats: CondFormatRule[]
     merges: MergeRange[]
     colWidths: Record<number, number>
     rowHeights: Record<number, number>
@@ -80,6 +88,10 @@ interface StoreState {
   clearSelectedContents: () => void
   /** Set (or clear, when text is empty) the note on a cell. */
   setNote: (row: number, col: number, text: string) => void
+  /** Append a conditional-formatting rule to the active sheet. */
+  addCondFormat: (rule: CondFormatRule) => void
+  /** Remove all conditional-formatting rules from the active sheet. */
+  clearCondFormats: () => void
 
   mergeSelection: () => void
   unmergeSelection: () => void
@@ -124,6 +136,7 @@ interface StoreState {
       merges?: MergeRange[]
       formats?: Record<string, CellFormat>
       notes?: Record<string, string>
+      condFormats?: CondFormatRule[]
       colWidths?: Record<number, number>
       rowHeights?: Record<number, number>
       frozenRows?: number
@@ -143,7 +156,7 @@ function buildInitial(): { hf: HyperFormula; sheets: SheetMeta[]; activeSheetId:
   hf.addSheet(name)
   const id = hf.getSheetId(name)!
   const sheets: SheetMeta[] = [
-    { id, name, formats: {}, notes: {}, merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 },
+    { id, name, formats: {}, notes: {}, condFormats: [], merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 },
   ]
   return { hf, sheets, activeSheetId: id }
 }
@@ -287,6 +300,21 @@ export const useStore = create<StoreState>((set, get) => {
       bump(set)
     },
 
+    addCondFormat(rule) {
+      pushUndo(set, get)
+      const sheet = get().activeSheet()
+      updateSheet(set, get, sheet.id, { condFormats: [...sheet.condFormats, rule] })
+      bump(set)
+    },
+
+    clearCondFormats() {
+      const sheet = get().activeSheet()
+      if (!sheet.condFormats.length) return
+      pushUndo(set, get)
+      updateSheet(set, get, sheet.id, { condFormats: [] })
+      bump(set)
+    },
+
     mergeSelection() {
       const sheet = get().activeSheet()
       const b = selectionBounds(get().selection)
@@ -384,6 +412,7 @@ export const useStore = create<StoreState>((set, get) => {
       updateSheet(set, get, sheet.id, {
         formats: shiftKeyed(sheet.formats, 'row', map),
         notes: shiftKeyed(sheet.notes, 'row', map),
+        condFormats: shiftCondFormats(sheet.condFormats, 'row', at, count, false),
         rowHeights: shiftSizes(sheet.rowHeights, map),
         merges: shiftMergesInsert(sheet.merges, 'row', at, count),
       })
@@ -398,6 +427,7 @@ export const useStore = create<StoreState>((set, get) => {
       updateSheet(set, get, sheet.id, {
         formats: shiftKeyed(sheet.formats, 'row', map),
         notes: shiftKeyed(sheet.notes, 'row', map),
+        condFormats: shiftCondFormats(sheet.condFormats, 'row', at, count, true),
         rowHeights: shiftSizes(sheet.rowHeights, map),
         merges: shiftMergesDelete(sheet.merges, 'row', at, count),
       })
@@ -412,6 +442,7 @@ export const useStore = create<StoreState>((set, get) => {
       updateSheet(set, get, sheet.id, {
         formats: shiftKeyed(sheet.formats, 'col', map),
         notes: shiftKeyed(sheet.notes, 'col', map),
+        condFormats: shiftCondFormats(sheet.condFormats, 'col', at, count, false),
         colWidths: shiftSizes(sheet.colWidths, map),
         merges: shiftMergesInsert(sheet.merges, 'col', at, count),
       })
@@ -426,6 +457,7 @@ export const useStore = create<StoreState>((set, get) => {
       updateSheet(set, get, sheet.id, {
         formats: shiftKeyed(sheet.formats, 'col', map),
         notes: shiftKeyed(sheet.notes, 'col', map),
+        condFormats: shiftCondFormats(sheet.condFormats, 'col', at, count, true),
         colWidths: shiftSizes(sheet.colWidths, map),
         merges: shiftMergesDelete(sheet.merges, 'col', at, count),
       })
@@ -454,6 +486,7 @@ export const useStore = create<StoreState>((set, get) => {
           contents: hf.getSheetSerialized(m.id) as CellValue[][],
           formats: m.formats,
           notes: m.notes,
+          condFormats: m.condFormats,
           merges: m.merges,
           colWidths: m.colWidths,
           rowHeights: m.rowHeights,
@@ -473,6 +506,7 @@ export const useStore = create<StoreState>((set, get) => {
         name: s.name,
         formats: s.formats ?? {},
         notes: s.notes ?? {},
+        condFormats: s.condFormats ?? [],
         merges: s.merges ?? [],
         colWidths: s.colWidths ?? {},
         rowHeights: s.rowHeights ?? {},
@@ -501,7 +535,7 @@ export const useStore = create<StoreState>((set, get) => {
       hf.addSheet(name)
       const id = hf.getSheetId(name)!
       set({
-        sheets: [...sheets, { id, name, formats: {}, notes: {}, merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 }],
+        sheets: [...sheets, { id, name, formats: {}, notes: {}, condFormats: [], merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 }],
         activeSheetId: id,
         selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
         past: [],
@@ -554,6 +588,7 @@ export const useStore = create<StoreState>((set, get) => {
         name: s.name,
         formats: s.formats ?? {},
         notes: s.notes ?? {},
+        condFormats: s.condFormats ?? [],
         merges: s.merges ?? [],
         colWidths: s.colWidths ?? {},
         rowHeights: s.rowHeights ?? {},
@@ -802,6 +837,7 @@ function cloneMeta(m: SheetMeta): SheetMeta {
     name: m.name,
     formats: structuredClone(m.formats),
     notes: { ...m.notes },
+    condFormats: m.condFormats.map((r) => ({ ...r, range: { ...r.range } })),
     merges: m.merges.map((x) => ({ ...x })),
     colWidths: { ...m.colWidths },
     rowHeights: { ...m.rowHeights },
@@ -906,6 +942,36 @@ function shiftMergesDelete(
       axis === 'row' ? { ...m, top: nlo, bottom: nhi } : { ...m, left: nlo, right: nhi }
     if (nm.top === nm.bottom && nm.left === nm.right) continue // collapsed to a single cell
     out.push(nm)
+  }
+  return out
+}
+
+/** Shift conditional-format ranges when rows/cols are inserted or deleted. */
+function shiftCondFormats(
+  rules: CondFormatRule[],
+  axis: 'row' | 'col',
+  at: number,
+  count: number,
+  isDelete: boolean,
+): CondFormatRule[] {
+  const out: CondFormatRule[] = []
+  for (const rule of rules) {
+    const m = rule.range
+    const lo = axis === 'row' ? m.top : m.left
+    const hi = axis === 'row' ? m.bottom : m.right
+    let nlo: number
+    let nhi: number
+    if (!isDelete) {
+      nlo = lo >= at ? lo + count : lo
+      nhi = hi >= at ? hi + count : hi
+    } else {
+      nlo = lo < at ? lo : lo < at + count ? at : lo - count
+      nhi = hi < at ? hi : hi < at + count ? at - 1 : hi - count
+      if (nhi < nlo) continue // range fully removed
+    }
+    const range =
+      axis === 'row' ? { ...m, top: nlo, bottom: nhi } : { ...m, left: nlo, right: nhi }
+    out.push({ ...rule, range })
   }
   return out
 }

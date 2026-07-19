@@ -38,6 +38,20 @@ export interface MergeRange {
   right: number
 }
 
+export type CondFormatOp = 'greaterThan' | 'lessThan' | 'between' | 'equal' | 'textContains'
+
+/** A conditional-formatting rule: highlight cells in `range` whose value matches. */
+export interface CondFormatRule {
+  range: MergeRange
+  op: CondFormatOp
+  /** Comparison operand (parsed as a number for numeric ops). */
+  value1: string
+  /** Upper bound for the 'between' operator. */
+  value2?: string
+  bgColor: string
+  color?: string
+}
+
 /** A cell coordinate within a sheet (0-based). */
 export interface CellRef {
   row: number
@@ -57,6 +71,8 @@ export interface SheetMeta {
   formats: Record<string, CellFormat>
   /** Per-cell notes/comments keyed by "row,col". */
   notes: Record<string, string>
+  /** Conditional-formatting rules, applied in order (later rules win). */
+  condFormats: CondFormatRule[]
   merges: MergeRange[]
   /** Custom column widths keyed by col index. */
   colWidths: Record<number, number>

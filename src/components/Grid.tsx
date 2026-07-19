@@ -8,6 +8,7 @@ import {
   HEADER_WIDTH,
 } from '../store/useStore'
 import { borderCss, displayValue, strongerBorder } from '../lib/format'
+import { condStyleFor } from '../lib/condFormat'
 import { colToLetter, isInSelection, key, selectionBounds } from '../lib/utils'
 import type { BorderSide, CellBorders, CellFormat, MergeRange } from '../types'
 import ContextMenu from './ContextMenu'
@@ -532,6 +533,11 @@ export default function Grid() {
                   if (fmt.align) style.textAlign = fmt.align
                   if (fmt.valign) style.verticalAlign = fmt.valign
                   if (fmt.wrap) style.whiteSpace = 'normal'
+                }
+                if (sheet.condFormats.length) {
+                  const cf = condStyleFor(sheet.condFormats, r, c, computed)
+                  if (cf.bgColor) style.background = cf.bgColor
+                  if (cf.color) style.color = cf.color
                 }
                 {
                   const bd = resolveBorders(sheet.formats, merge, r, c)

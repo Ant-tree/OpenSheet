@@ -4,6 +4,7 @@ import FormulaBar from './components/FormulaBar'
 import Grid from './components/Grid'
 import SheetTabs from './components/SheetTabs'
 import FindReplace from './components/FindReplace'
+import CondFormatPanel from './components/CondFormatPanel'
 import { useStore } from './store/useStore'
 import type { SerializedDoc } from './store/useStore'
 import { loadDraft, saveDraft } from './lib/recentFiles'
@@ -15,6 +16,7 @@ import { useThemeStore, type Theme } from './theme'
 export default function App() {
   const t = useT()
   const [findMode, setFindMode] = useState<'find' | 'replace' | null>(null)
+  const [showCond, setShowCond] = useState(false)
   const lang = useLangStore((s) => s.lang)
   const setLang = useLangStore((s) => s.setLang)
   const theme = useThemeStore((s) => s.theme)
@@ -155,9 +157,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <Toolbar />
+      <Toolbar onOpenCondFormat={() => setShowCond((v) => !v)} />
       <FormulaBar />
       {findMode && <FindReplace mode={findMode} onClose={() => setFindMode(null)} />}
+      {showCond && <CondFormatPanel onClose={() => setShowCond(false)} />}
       <Grid />
       <SheetTabs />
       <div className="status-bar">
