@@ -15,6 +15,21 @@ export type BorderPreset = 'all' | 'outer' | 'top' | 'bottom' | 'left' | 'right'
 
 type CellValue = string | number | boolean | null
 
+/** JSON-serializable snapshot of the whole document, for autosave/recovery. */
+export interface SerializedDoc {
+  fileName: string
+  sheets: {
+    name: string
+    contents: CellValue[][]
+    formats: Record<string, CellFormat>
+    merges: MergeRange[]
+    colWidths: Record<number, number>
+    rowHeights: Record<number, number>
+    frozenRows: number
+    frozenCols: number
+  }[]
+}
+
 /** A point-in-time snapshot of editable state, for undo/redo. */
 interface Snapshot {
   sheets: SheetMeta[]
@@ -89,6 +104,9 @@ interface StoreState {
   fillRange: (src: MergeRange, tgt: MergeRange) => void
 
   setFileHandle: (handle: FileSystemFileHandle | null) => void
+
+  serializeState: () => SerializedDoc
+  restoreState: (data: SerializedDoc) => void
 
   addSheet: () => void
   removeSheet: (id: number) => void
@@ -401,6 +419,52 @@ export const useStore = create<StoreState>((set, get) => {
 
     setFileHandle(handle) {
       set({ fileHandle: handle })
+    },
+
+    serializeState() {
+      const { hf, sheets, fileName } = get()
+      return {
+        fileName,
+        sheets: sheets.map((m) => ({
+          name: m.name,
+          contents: hf.getSheetSerialized(m.id) as CellValue[][],
+          formats: m.formats,
+          merges: m.merges,
+          colWidths: m.colWidths,
+          rowHeights: m.rowHeights,
+          frozenRows: m.frozenRows,
+          frozenCols: m.frozenCols,
+        })),
+      }
+    },
+
+    restoreState(data) {
+      if (!data.sheets?.length) return
+      const sheetsData: Record<string, CellValue[][]> = {}
+      for (const s of data.sheets) sheetsData[s.name] = s.contents
+      const hf = HyperFormula.buildFromSheets(sheetsData, { licenseKey: 'gpl-v3' })
+      const metas: SheetMeta[] = data.sheets.map((s) => ({
+        id: hf.getSheetId(s.name)!,
+        name: s.name,
+        formats: s.formats ?? {},
+        merges: s.merges ?? [],
+        colWidths: s.colWidths ?? {},
+        rowHeights: s.rowHeights ?? {},
+        frozenRows: s.frozenRows ?? 0,
+        frozenCols: s.frozenCols ?? 0,
+      }))
+      set({
+        hf,
+        sheets: metas,
+        activeSheetId: metas[0].id,
+        selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
+        editing: null,
+        fileName: data.fileName,
+        fileHandle: null,
+        past: [],
+        future: [],
+        rev: get().rev + 1,
+      })
     },
 
     addSheet() {

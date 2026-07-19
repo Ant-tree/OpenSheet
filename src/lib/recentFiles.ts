@@ -3,6 +3,7 @@
 
 const DB_NAME = 'opensheet'
 const STORE = 'recent'
+const KV = 'kv'
 const MAX_RECENT = 12
 
 export interface RecentFile {
@@ -14,14 +15,57 @@ export interface RecentFile {
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1)
+    const req = indexedDB.open(DB_NAME, 2)
     req.onupgradeneeded = () => {
       const db = req.result
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' })
+      if (!db.objectStoreNames.contains(KV)) db.createObjectStore(KV)
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
   })
+}
+
+/** Persist the working document so a reload can recover it. Best-effort. */
+export async function saveDraft(data: unknown): Promise<void> {
+  try {
+    const db = await openDB()
+    await new Promise<void>((resolve, reject) => {
+      const t = db.transaction(KV, 'readwrite')
+      t.objectStore(KV).put(data, 'draft')
+      t.oncomplete = () => resolve()
+      t.onerror = () => reject(t.error)
+    })
+  } catch {
+    /* storage unavailable — never block editing */
+  }
+}
+
+export async function loadDraft<T = unknown>(): Promise<T | null> {
+  try {
+    const db = await openDB()
+    return await new Promise<T | null>((resolve) => {
+      const req = db.transaction(KV, 'readonly').objectStore(KV).get('draft')
+      req.onsuccess = () => resolve((req.result as T) ?? null)
+      req.onerror = () => resolve(null)
+    })
+  } catch {
+    return null
+  }
+}
+
+export async function clearDraft(): Promise<void> {
+  try {
+    const db = await openDB()
+    await new Promise<void>((resolve) => {
+      const t = db.transaction(KV, 'readwrite')
+      t.objectStore(KV).delete('draft')
+      t.oncomplete = () => resolve()
+      t.onerror = () => resolve()
+    })
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function listRecentFiles(): Promise<RecentFile[]> {

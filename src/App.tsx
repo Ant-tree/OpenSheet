@@ -5,6 +5,8 @@ import Grid from './components/Grid'
 import SheetTabs from './components/SheetTabs'
 import FindReplace from './components/FindReplace'
 import { useStore } from './store/useStore'
+import type { SerializedDoc } from './store/useStore'
+import { loadDraft, saveDraft } from './lib/recentFiles'
 import { iterateSelection } from './lib/utils'
 import { exportWorkbook, saveToHandle } from './lib/fileIO'
 import { t as translate, useLangStore, useT } from './i18n'
@@ -92,6 +94,27 @@ export default function App() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [selection])
+
+  // Autosave to IndexedDB and recover the last session on load.
+  useEffect(() => {
+    loadDraft<SerializedDoc>()
+      .then((d) => {
+        if (d) useStore.getState().restoreState(d)
+      })
+      .catch(() => {})
+    let timer: number
+    let lastRev = useStore.getState().rev
+    const unsub = useStore.subscribe((state) => {
+      if (state.rev === lastRev) return
+      lastRev = state.rev
+      clearTimeout(timer)
+      timer = window.setTimeout(() => saveDraft(useStore.getState().serializeState()), 1200)
+    })
+    return () => {
+      clearTimeout(timer)
+      unsub()
+    }
+  }, [])
 
   // Copy / cut / paste over the selection (skip while editing text or in the
   // formula bar so their native clipboard behaviour still works).
