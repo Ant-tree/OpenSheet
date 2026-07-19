@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useStore } from '../store/useStore'
 import type { BorderPreset } from '../store/useStore'
 import {
@@ -34,18 +35,19 @@ function Dropdown({
 }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    const onDown = (e: Event) => {
+      const target = e.target as Node
+      if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setOpen(false)
     }
-    window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
+    // pointerdown covers both mouse and touch (iOS WKWebView).
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
   }, [open])
-  // The menu is position:fixed so it escapes the toolbar's horizontal-scroll
-  // overflow clipping on mobile; anchor it under the trigger button.
   const toggle = () => {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect()
@@ -54,20 +56,26 @@ function Dropdown({
     setOpen((o) => !o)
   }
   return (
-    <div className="dropdown" ref={ref}>
+    <div className="dropdown">
       <button ref={btnRef} className="tbtn" title={title} onClick={toggle}>
         {trigger}
         <Icon name="chevron-down" className="caret" />
       </button>
-      {open && pos && (
-        <div
-          className="dropdown-menu"
-          style={{ top: pos.top, left: pos.left }}
-          onClick={() => setOpen(false)}
-        >
-          {children}
-        </div>
-      )}
+      {/* Portal to <body> so the menu escapes the toolbar's overflow/scroll
+          layer — otherwise iOS WKWebView clips the fixed menu inside it. */}
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="dropdown-menu"
+            style={{ top: pos.top, left: pos.left }}
+            onClick={() => setOpen(false)}
+          >
+            {children}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
