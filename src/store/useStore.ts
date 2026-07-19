@@ -1,7 +1,13 @@
 import { create } from 'zustand'
 import { HyperFormula } from 'hyperformula'
 import type { BorderSide, CellFormat, MergeRange, Selection, SheetMeta } from '../types'
-import { iterateSelection, key, selectionBounds, shiftFormulaRowRefs } from '../lib/utils'
+import {
+  iterateSelection,
+  key,
+  replaceCaseInsensitive,
+  selectionBounds,
+  shiftFormulaRowRefs,
+} from '../lib/utils'
 import { detectLang, t } from '../i18n'
 
 export type BorderPreset = 'all' | 'outer' | 'top' | 'bottom' | 'left' | 'right' | 'none'
@@ -75,6 +81,8 @@ interface StoreState {
   pasteText: (text: string) => void
   /** TSV of the last in-app copy, for pasting when the system clipboard is unavailable. */
   internalClipboardText: () => string | null
+  /** Replace every occurrence of `find` with `repl` across the active sheet; returns match count. */
+  replaceAll: (find: string, repl: string) => number
 
   setFileHandle: (handle: FileSystemFileHandle | null) => void
 
@@ -520,6 +528,34 @@ export const useStore = create<StoreState>((set, get) => {
 
     internalClipboardText() {
       return clipboard ? clipboard.rows.map((r) => r.join('\t')).join('\n') : null
+    },
+
+    replaceAll(find, repl) {
+      if (!find) return 0
+      const { hf, activeSheetId } = get()
+      const dims = hf.getSheetDimensions(activeSheetId)
+      const lower = find.toLowerCase()
+      const hits: { row: number; col: number; next: string }[] = []
+      for (let r = 0; r < dims.height; r++) {
+        for (let c = 0; c < dims.width; c++) {
+          const raw = hf.getCellSerialized({ sheet: activeSheetId, row: r, col: c })
+          if (raw === null || raw === undefined) continue
+          const str = String(raw)
+          if (str.toLowerCase().includes(lower)) {
+            hits.push({ row: r, col: c, next: replaceCaseInsensitive(str, find, repl) })
+          }
+        }
+      }
+      if (!hits.length) return 0
+      pushUndo(set, get)
+      for (const h of hits) {
+        hf.setCellContents(
+          { sheet: activeSheetId, row: h.row, col: h.col },
+          h.next === '' ? null : h.next,
+        )
+      }
+      bump(set)
+      return hits.length
     },
 
     pasteText(text) {

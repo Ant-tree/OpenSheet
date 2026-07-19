@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Toolbar from './components/Toolbar'
 import FormulaBar from './components/FormulaBar'
 import Grid from './components/Grid'
 import SheetTabs from './components/SheetTabs'
+import FindReplace from './components/FindReplace'
 import { useStore } from './store/useStore'
 import { iterateSelection } from './lib/utils'
 import { exportWorkbook, saveToHandle } from './lib/fileIO'
@@ -10,6 +11,7 @@ import { t as translate, useLangStore, useT } from './i18n'
 
 export default function App() {
   const t = useT()
+  const [findMode, setFindMode] = useState<'find' | 'replace' | null>(null)
   const lang = useLangStore((s) => s.lang)
   const setLang = useLangStore((s) => s.setLang)
   const selection = useStore((s) => s.selection)
@@ -46,6 +48,13 @@ export default function App() {
         } else {
           exportWorkbook(store.hf, store.sheets, store.fileName, 'xlsx').catch(onErr)
         }
+        return
+      }
+
+      // Find / replace (override the browser's Ctrl+F / Ctrl+H).
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'h')) {
+        e.preventDefault()
+        setFindMode(e.key === 'h' ? 'replace' : 'find')
         return
       }
 
@@ -122,6 +131,7 @@ export default function App() {
     <div className="app">
       <Toolbar />
       <FormulaBar />
+      {findMode && <FindReplace mode={findMode} onClose={() => setFindMode(null)} />}
       <Grid />
       <SheetTabs />
       <div className="status-bar">

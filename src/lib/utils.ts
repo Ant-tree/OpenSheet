@@ -73,3 +73,10 @@ export function shiftFormulaRowRefs(formula: string, delta: number): string {
     return `${colAbs}${col}${rowAbs}${newRow}`
   })
 }
+
+/** Case-insensitive replace-all of `find` with `repl` in `str`. */
+export function replaceCaseInsensitive(str: string, find: string, repl: string): string {
+  if (!find) return str
+  const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return str.replace(new RegExp(escaped, 'gi'), repl)
+}
