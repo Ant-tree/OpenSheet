@@ -547,7 +547,7 @@ export default function Grid() {
                   if (frozenR) style.top = rowTop[r]
                   if (frozenC) style.left = colLeft[c]
                   style.zIndex = frozenR && frozenC ? 3 : 1
-                  style.background = fmt?.bgColor ?? '#fff'
+                  style.background = fmt?.bgColor ?? 'var(--cell-bg)'
                   if (r === frozenRows - 1) style.borderBottom = '2px solid #9aa4b2'
                   if (c === frozenCols - 1) style.borderRight = '2px solid #9aa4b2'
                 }

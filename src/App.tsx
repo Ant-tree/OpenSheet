@@ -10,12 +10,15 @@ import { loadDraft, saveDraft } from './lib/recentFiles'
 import { iterateSelection } from './lib/utils'
 import { exportWorkbook, saveToHandle } from './lib/fileIO'
 import { t as translate, useLangStore, useT } from './i18n'
+import { useThemeStore, type Theme } from './theme'
 
 export default function App() {
   const t = useT()
   const [findMode, setFindMode] = useState<'find' | 'replace' | null>(null)
   const lang = useLangStore((s) => s.lang)
   const setLang = useLangStore((s) => s.setLang)
+  const theme = useThemeStore((s) => s.theme)
+  const setTheme = useThemeStore((s) => s.setTheme)
   const selection = useStore((s) => s.selection)
   const fileName = useStore((s) => s.fileName)
   useStore((s) => s.rev)
@@ -173,6 +176,16 @@ export default function App() {
             </span>
           </>
         )}
+        <select
+          className="lang-select"
+          title={t('theme')}
+          value={theme}
+          onChange={(e) => setTheme(e.target.value as Theme)}
+        >
+          <option value="auto">{t('themeAuto')}</option>
+          <option value="light">{t('themeLight')}</option>
+          <option value="dark">{t('themeDark')}</option>
+        </select>
         <select
           className="lang-select"
           title={t('language')}
