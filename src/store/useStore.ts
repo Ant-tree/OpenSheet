@@ -62,12 +62,19 @@ interface StoreState {
   setColWidth: (col: number, width: number) => void
   setRowHeight: (row: number, height: number) => void
 
+  insertRows: (at: number, count?: number) => void
+  deleteRows: (at: number, count?: number) => void
+  insertCols: (at: number, count?: number) => void
+  deleteCols: (at: number, count?: number) => void
+
   undo: () => void
   redo: () => void
   /** Copy the selection to the internal clipboard; returns TSV for the system clipboard. */
   copySelection: () => string
   cutSelection: () => string
   pasteText: (text: string) => void
+  /** TSV of the last in-app copy, for pasting when the system clipboard is unavailable. */
+  internalClipboardText: () => string | null
 
   setFileHandle: (handle: FileSystemFileHandle | null) => void
 
@@ -317,6 +324,58 @@ export const useStore = create<StoreState>((set, get) => {
       })
     },
 
+    insertRows(at, count = 1) {
+      pushUndo(set, get)
+      const sheet = get().activeSheet()
+      get().hf.addRows(sheet.id, [at, count])
+      const map = (i: number) => (i >= at ? i + count : i)
+      updateSheet(set, get, sheet.id, {
+        formats: shiftFormats(sheet.formats, 'row', map),
+        rowHeights: shiftSizes(sheet.rowHeights, map),
+        merges: shiftMergesInsert(sheet.merges, 'row', at, count),
+      })
+      bump(set)
+    },
+
+    deleteRows(at, count = 1) {
+      pushUndo(set, get)
+      const sheet = get().activeSheet()
+      get().hf.removeRows(sheet.id, [at, count])
+      const map = (i: number) => (i < at ? i : i < at + count ? null : i - count)
+      updateSheet(set, get, sheet.id, {
+        formats: shiftFormats(sheet.formats, 'row', map),
+        rowHeights: shiftSizes(sheet.rowHeights, map),
+        merges: shiftMergesDelete(sheet.merges, 'row', at, count),
+      })
+      bump(set)
+    },
+
+    insertCols(at, count = 1) {
+      pushUndo(set, get)
+      const sheet = get().activeSheet()
+      get().hf.addColumns(sheet.id, [at, count])
+      const map = (i: number) => (i >= at ? i + count : i)
+      updateSheet(set, get, sheet.id, {
+        formats: shiftFormats(sheet.formats, 'col', map),
+        colWidths: shiftSizes(sheet.colWidths, map),
+        merges: shiftMergesInsert(sheet.merges, 'col', at, count),
+      })
+      bump(set)
+    },
+
+    deleteCols(at, count = 1) {
+      pushUndo(set, get)
+      const sheet = get().activeSheet()
+      get().hf.removeColumns(sheet.id, [at, count])
+      const map = (i: number) => (i < at ? i : i < at + count ? null : i - count)
+      updateSheet(set, get, sheet.id, {
+        formats: shiftFormats(sheet.formats, 'col', map),
+        colWidths: shiftSizes(sheet.colWidths, map),
+        merges: shiftMergesDelete(sheet.merges, 'col', at, count),
+      })
+      bump(set)
+    },
+
     setFileHandle(handle) {
       set({ fileHandle: handle })
     },
@@ -459,6 +518,10 @@ export const useStore = create<StoreState>((set, get) => {
       return tsv
     },
 
+    internalClipboardText() {
+      return clipboard ? clipboard.rows.map((r) => r.join('\t')).join('\n') : null
+    },
+
     pasteText(text) {
       if (!text) return
       const lines = text.replace(/\r\n?/g, '\n').split('\n')
@@ -537,6 +600,77 @@ function updateSheet(
 
 function overlaps(a: MergeRange, b: MergeRange): boolean {
   return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom)
+}
+
+// --- row/column insert/delete: shift metadata keyed by index ---
+type IndexMap = (i: number) => number | null
+
+function shiftFormats(
+  formats: Record<string, CellFormat>,
+  axis: 'row' | 'col',
+  map: IndexMap,
+): Record<string, CellFormat> {
+  const out: Record<string, CellFormat> = {}
+  for (const k in formats) {
+    const [r, c] = k.split(',').map(Number)
+    const nr = axis === 'row' ? map(r) : r
+    const nc = axis === 'col' ? map(c) : c
+    if (nr === null || nc === null) continue
+    out[`${nr},${nc}`] = formats[k]
+  }
+  return out
+}
+
+function shiftSizes(sizes: Record<number, number>, map: IndexMap): Record<number, number> {
+  const out: Record<number, number> = {}
+  for (const k in sizes) {
+    const ni = map(Number(k))
+    if (ni !== null) out[ni] = sizes[Number(k)]
+  }
+  return out
+}
+
+function shiftMergesInsert(
+  merges: MergeRange[],
+  axis: 'row' | 'col',
+  at: number,
+  count: number,
+): MergeRange[] {
+  return merges.map((m) => {
+    if (axis === 'row') {
+      return {
+        ...m,
+        top: m.top >= at ? m.top + count : m.top,
+        bottom: m.bottom >= at ? m.bottom + count : m.bottom,
+      }
+    }
+    return {
+      ...m,
+      left: m.left >= at ? m.left + count : m.left,
+      right: m.right >= at ? m.right + count : m.right,
+    }
+  })
+}
+
+function shiftMergesDelete(
+  merges: MergeRange[],
+  axis: 'row' | 'col',
+  at: number,
+  count: number,
+): MergeRange[] {
+  const out: MergeRange[] = []
+  for (const m of merges) {
+    const lo = axis === 'row' ? m.top : m.left
+    const hi = axis === 'row' ? m.bottom : m.right
+    const nlo = lo < at ? lo : lo < at + count ? at : lo - count
+    const nhi = hi < at ? hi : hi < at + count ? at - 1 : hi - count
+    if (nhi < nlo) continue // range fully removed
+    const nm: MergeRange =
+      axis === 'row' ? { ...m, top: nlo, bottom: nhi } : { ...m, left: nlo, right: nhi }
+    if (nm.top === nm.bottom && nm.left === nm.right) continue // collapsed to a single cell
+    out.push(nm)
+  }
+  return out
 }
 
 function cmp(a: unknown, b: unknown): number {

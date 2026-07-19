@@ -10,6 +10,7 @@ import {
 import { borderCss, displayValue, strongerBorder } from '../lib/format'
 import { colToLetter, isInSelection, key, selectionBounds } from '../lib/utils'
 import type { BorderSide, CellBorders, CellFormat, MergeRange } from '../types'
+import ContextMenu from './ContextMenu'
 
 /**
  * Compute the borders to actually paint for a rendered cell (a normal cell, or
@@ -91,6 +92,8 @@ export default function Grid() {
   // inserts their A1 reference instead of moving the selection.
   const pointAnchor = useRef<{ row: number; col: number } | null>(null)
   const refRange = useRef<{ start: number; end: number } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const longPress = useRef<number | null>(null)
 
   // Build lookup of merge coverage for the active sheet.
   const { covered, anchorOf } = useMemo(() => {
@@ -293,6 +296,33 @@ export default function Grid() {
     return () => window.removeEventListener('mouseup', up)
   }, [])
 
+  // ----- context menu (right-click / long-press) -----
+  const openContext = (row: number, col: number, x: number, y: number) => {
+    if (!isInSelection(row, col, useStore.getState().selection)) {
+      setSelection({ anchor: { row, col }, focus: { row, col } })
+    }
+    setCtxMenu({ x, y })
+  }
+  const onCellContextMenu = (row: number, col: number, e: React.MouseEvent) => {
+    e.preventDefault()
+    openContext(row, col, e.clientX, e.clientY)
+  }
+  const cancelLongPress = () => {
+    if (longPress.current) {
+      clearTimeout(longPress.current)
+      longPress.current = null
+    }
+  }
+  const onTouchStart = (e: React.TouchEvent) => {
+    const td = (e.target as HTMLElement).closest('td[data-r]')
+    if (!td) return
+    const row = Number(td.getAttribute('data-r'))
+    const col = Number(td.getAttribute('data-c'))
+    const touch = e.touches[0]
+    cancelLongPress()
+    longPress.current = window.setTimeout(() => openContext(row, col, touch.clientX, touch.clientY), 500)
+  }
+
   // ----- column resize -----
   const resizeState = useRef<{ col: number; startX: number; startW: number } | null>(null)
   const onResizeDown = (col: number, e: React.MouseEvent) => {
@@ -341,7 +371,13 @@ export default function Grid() {
   }, [selection.focus.row, selection.focus.col])
 
   return (
-    <div className="grid-scroll" ref={scrollRef}>
+    <div
+      className="grid-scroll"
+      ref={scrollRef}
+      onTouchStart={onTouchStart}
+      onTouchEnd={cancelLongPress}
+      onTouchMove={cancelLongPress}
+    >
       <table className="grid" style={{ width: totalWidth }}>
         <colgroup>
           <col style={{ width: HEADER_WIDTH }} />
@@ -423,9 +459,12 @@ export default function Grid() {
                       isNum && !fmt?.align ? ' num' : ''
                     }`}
                     style={style}
+                    data-r={r}
+                    data-c={c}
                     onMouseDown={(e) => onCellMouseDown(r, c, e)}
                     onMouseEnter={() => onCellMouseEnter(r, c)}
                     onDoubleClick={() => enterEdit(r, c)}
+                    onContextMenu={(e) => onCellContextMenu(r, c, e)}
                   >
                     {isActive ? (
                       <>
@@ -451,6 +490,9 @@ export default function Grid() {
           ))}
         </tbody>
       </table>
+      {ctxMenu && (
+        <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={() => setCtxMenu(null)} />
+      )}
     </div>
   )
 }

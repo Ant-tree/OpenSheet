@@ -175,6 +175,15 @@ body {
   font-size: 13px;
   text-align: center;
 }
+.menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
+}
+.context-menu {
+  max-height: 85vh;
+  overflow-y: auto;
+}
 .recent-name {
   max-width: 200px;
   overflow: hidden;
