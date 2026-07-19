@@ -614,3 +614,65 @@ table.grid {
     padding-bottom: calc(4px + env(safe-area-inset-bottom));
   }
 }
+
+/* ---------- Print / PDF ---------- */
+@media print {
+  /* Print on white regardless of the on-screen theme. */
+  :root,
+  :root[data-theme='dark'] {
+    --bg: #ffffff;
+    --fg: #000000;
+    --cell-bg: #ffffff;
+    --border: #999999;
+    --header-bg: #f0f0f0;
+    --header-fg: #333333;
+  }
+  html,
+  body {
+    height: auto;
+    background: #fff;
+  }
+  /* Hide all chrome; print only the grid. */
+  .toolbar,
+  .formula-bar,
+  .find-panel,
+  .sheet-tabs,
+  .status-bar,
+  .fill-handle,
+  .col-resize {
+    display: none !important;
+  }
+  .app {
+    height: auto;
+    overflow: visible;
+    display: block;
+    padding: 0;
+  }
+  .grid-scroll {
+    flex: none;
+    overflow: visible;
+    height: auto;
+  }
+  /* Sticky positioning fights pagination — pin everything static. */
+  .grid thead th,
+  .grid .rowhead,
+  .grid .corner,
+  .cell {
+    position: static !important;
+  }
+  .cell.active {
+    outline: none !important;
+  }
+  .cell-input {
+    display: none !important;
+  }
+  /* Reproduce fills and borders on paper. */
+  .grid th,
+  .grid td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  table.grid {
+    width: 100%;
+  }
+}

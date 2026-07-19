@@ -266,6 +266,13 @@ export default function Toolbar() {
           <button className="menu-item" onClick={() => save('csv')}>
             {t('saveCsv')}
           </button>
+          <div className="menu-sep" />
+          <button className="menu-item" onClick={() => window.print()}>
+            <span className="menu-label">
+              <Icon name="print" />
+              {t('printPdf')}
+            </span>
+          </button>
         </Dropdown>
         <input
           ref={fileRef}
