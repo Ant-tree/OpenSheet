@@ -14,6 +14,8 @@ export interface ImportedSheet {
   colWidths: Record<number, number>
   /** Custom row heights in px, keyed by row index. */
   rowHeights: Record<number, number>
+  frozenRows: number
+  frozenCols: number
 }
 
 export interface ImportedWorkbook {
@@ -185,7 +187,12 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
 
     const merges: MergeRange[] = readMerges(ws)
 
-    sheets.push({ name: ws.name, rows, merges, formats, colWidths, rowHeights })
+    const view = (ws.views ?? [])[0] as { state?: string; xSplit?: number; ySplit?: number } | undefined
+    const frozen = view?.state === 'frozen'
+    const frozenRows = frozen ? view?.ySplit ?? 0 : 0
+    const frozenCols = frozen ? view?.xSplit ?? 0 : 0
+
+    sheets.push({ name: ws.name, rows, merges, formats, colWidths, rowHeights, frozenRows, frozenCols })
   })
 
   return { fileName: file.name, sheets }
@@ -310,7 +317,16 @@ function csvToSheet(fileName: string, text: string): ImportedSheet {
     }),
   )
   const name = fileName.replace(/\.csv$/i, '') || 'Sheet1'
-  return { name: name.slice(0, 31), rows, merges: [], formats: {}, colWidths: {}, rowHeights: {} }
+  return {
+    name: name.slice(0, 31),
+    rows,
+    merges: [],
+    formats: {},
+    colWidths: {},
+    rowHeights: {},
+    frozenRows: 0,
+    frozenCols: 0,
+  }
 }
 
 /** Minimal RFC-4180-ish CSV parser handling quoted fields and embedded newlines. */
@@ -489,6 +505,9 @@ export function buildWorkbook(
         // a union and write it onto the master so the whole box survives.
         const union = mergedUnionBorders(meta.formats, m)
         if (union) ws.getCell(m.top + 1, m.left + 1).border = toExcelBorders(union)
+      }
+      if (meta.frozenRows || meta.frozenCols) {
+        ws.views = [{ state: 'frozen', xSplit: meta.frozenCols, ySplit: meta.frozenRows }]
       }
     }
   }

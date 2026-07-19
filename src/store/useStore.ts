@@ -73,6 +73,7 @@ interface StoreState {
   deleteRows: (at: number, count?: number) => void
   insertCols: (at: number, count?: number) => void
   deleteCols: (at: number, count?: number) => void
+  setFreeze: (rows: number, cols: number) => void
 
   undo: () => void
   redo: () => void
@@ -102,6 +103,8 @@ interface StoreState {
       formats?: Record<string, CellFormat>
       colWidths?: Record<number, number>
       rowHeights?: Record<number, number>
+      frozenRows?: number
+      frozenCols?: number
     }[],
     fileName: string,
   ) => void
@@ -117,7 +120,7 @@ function buildInitial(): { hf: HyperFormula; sheets: SheetMeta[]; activeSheetId:
   hf.addSheet(name)
   const id = hf.getSheetId(name)!
   const sheets: SheetMeta[] = [
-    { id, name, formats: {}, merges: [], colWidths: {}, rowHeights: {} },
+    { id, name, formats: {}, merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 },
   ]
   return { hf, sheets, activeSheetId: id }
 }
@@ -387,6 +390,15 @@ export const useStore = create<StoreState>((set, get) => {
       bump(set)
     },
 
+    setFreeze(rows, cols) {
+      const sheet = get().activeSheet()
+      updateSheet(set, get, sheet.id, {
+        frozenRows: Math.max(0, Math.min(rows, MAX_ROWS - 1)),
+        frozenCols: Math.max(0, Math.min(cols, MAX_COLS - 1)),
+      })
+      bump(set)
+    },
+
     setFileHandle(handle) {
       set({ fileHandle: handle })
     },
@@ -399,7 +411,7 @@ export const useStore = create<StoreState>((set, get) => {
       hf.addSheet(name)
       const id = hf.getSheetId(name)!
       set({
-        sheets: [...sheets, { id, name, formats: {}, merges: [], colWidths: {}, rowHeights: {} }],
+        sheets: [...sheets, { id, name, formats: {}, merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 }],
         activeSheetId: id,
         selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
         past: [],
@@ -454,6 +466,8 @@ export const useStore = create<StoreState>((set, get) => {
         merges: s.merges ?? [],
         colWidths: s.colWidths ?? {},
         rowHeights: s.rowHeights ?? {},
+        frozenRows: s.frozenRows ?? 0,
+        frozenCols: s.frozenCols ?? 0,
       }))
 
       set({
@@ -699,6 +713,8 @@ function cloneMeta(m: SheetMeta): SheetMeta {
     merges: m.merges.map((x) => ({ ...x })),
     colWidths: { ...m.colWidths },
     rowHeights: { ...m.rowHeights },
+    frozenRows: m.frozenRows,
+    frozenCols: m.frozenCols,
   }
 }
 

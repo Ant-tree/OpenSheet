@@ -403,6 +403,20 @@ export default function Grid() {
     return w
   }, [sheet.colWidths])
 
+  // Freeze panes: sticky offsets (px) for the first N frozen rows / columns.
+  const frozenRows = sheet.frozenRows ?? 0
+  const frozenCols = sheet.frozenCols ?? 0
+  const rowTop = useMemo(() => {
+    const arr = [DEFAULT_ROW_HEIGHT] // below the sticky column-header row
+    for (let r = 0; r < frozenRows; r++) arr.push(arr[r] + (sheet.rowHeights[r] ?? DEFAULT_ROW_HEIGHT))
+    return arr
+  }, [sheet.rowHeights, frozenRows])
+  const colLeft = useMemo(() => {
+    const arr = [HEADER_WIDTH] // right of the sticky row-number column
+    for (let c = 0; c < frozenCols; c++) arr.push(arr[c] + (sheet.colWidths[c] ?? DEFAULT_COL_WIDTH))
+    return arr
+  }, [sheet.colWidths, frozenCols])
+
   // Keep the active cell scrolled into view on keyboard navigation. We compute
   // this manually because native scrollIntoView ignores the sticky header/row
   // offsets and would hide cells behind them.
@@ -440,6 +454,15 @@ export default function Grid() {
               <th
                 key={c}
                 className={`colhead${c >= bounds.left && c <= bounds.right ? ' sel' : ''}`}
+                style={
+                  c < frozenCols
+                    ? {
+                        left: colLeft[c],
+                        zIndex: 4,
+                        borderRight: c === frozenCols - 1 ? '2px solid #9aa4b2' : undefined,
+                      }
+                    : undefined
+                }
                 onMouseDown={() =>
                   setSelection({
                     anchor: { row: 0, col: c },
@@ -460,6 +483,15 @@ export default function Grid() {
             <tr key={r}>
               <th
                 className={`rowhead${r >= bounds.top && r <= bounds.bottom ? ' sel' : ''}`}
+                style={
+                  r < frozenRows
+                    ? {
+                        top: rowTop[r],
+                        zIndex: 4,
+                        borderBottom: r === frozenRows - 1 ? '2px solid #9aa4b2' : undefined,
+                      }
+                    : undefined
+                }
                 onMouseDown={() =>
                   setSelection({
                     anchor: { row: r, col: 0 },
@@ -506,6 +538,17 @@ export default function Grid() {
                   if (bd.right) style.borderRight = borderCss(bd.right)
                 }
                 if (isFillCorner) style.position = 'relative'
+                const frozenR = r < frozenRows
+                const frozenC = c < frozenCols
+                if (frozenR || frozenC) {
+                  style.position = 'sticky'
+                  if (frozenR) style.top = rowTop[r]
+                  if (frozenC) style.left = colLeft[c]
+                  style.zIndex = frozenR && frozenC ? 3 : 1
+                  style.background = fmt?.bgColor ?? '#fff'
+                  if (r === frozenRows - 1) style.borderBottom = '2px solid #9aa4b2'
+                  if (c === frozenCols - 1) style.borderRight = '2px solid #9aa4b2'
+                }
 
                 return (
                   <td

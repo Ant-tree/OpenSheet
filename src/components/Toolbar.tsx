@@ -133,6 +133,7 @@ export default function Toolbar() {
   const unmergeSelection = useStore((s) => s.unmergeSelection)
   const sortSelection = useStore((s) => s.sortSelection)
   const applyBorders = useStore((s) => s.applyBorders)
+  const setFreeze = useStore((s) => s.setFreeze)
   const loadWorkbook = useStore((s) => s.loadWorkbook)
   const setFileHandle = useStore((s) => s.setFileHandle)
   const getFormat = useStore((s) => s.getFormat)
@@ -387,6 +388,34 @@ export default function Toolbar() {
         <button className="tbtn" title={t('sortDesc')} onClick={() => sortSelection(false)}>
           <Icon name="sort-desc" />
         </button>
+      </div>
+
+      <div className="group">
+        <Dropdown
+          title={t('freeze')}
+          trigger={
+            <>
+              <Icon name="freeze" />
+              {t('freeze')}
+            </>
+          }
+        >
+          <button
+            className="menu-item"
+            onClick={() => setFreeze(selection.focus.row, selection.focus.col)}
+          >
+            {t('freezeToSelection')}
+          </button>
+          <button className="menu-item" onClick={() => setFreeze(1, 0)}>
+            {t('freezeRow')}
+          </button>
+          <button className="menu-item" onClick={() => setFreeze(0, 1)}>
+            {t('freezeCol')}
+          </button>
+          <button className="menu-item" onClick={() => setFreeze(0, 0)}>
+            {t('unfreeze')}
+          </button>
+        </Dropdown>
       </div>
     </div>
   )

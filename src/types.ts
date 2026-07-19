@@ -56,4 +56,7 @@ export interface SheetMeta {
   colWidths: Record<number, number>
   /** Custom row heights keyed by row index. */
   rowHeights: Record<number, number>
+  /** Number of leading rows/columns frozen (kept visible while scrolling). */
+  frozenRows: number
+  frozenCols: number
 }
