@@ -237,11 +237,9 @@ export default function Toolbar({
   const saveAs = async () => {
     const { hf, sheets, fileName, charts } = useStore.getState()
     try {
-      const handle = await saveWorkbookAs(hf, sheets, fileName, 'xlsx', charts)
-      if (handle === undefined) return // user cancelled
-      if (handle) {
-        useStore.setState({ fileName: handle.name, fileHandle: handle })
-      }
+      const res = await saveWorkbookAs(hf, sheets, fileName, 'xlsx', charts)
+      if (!res) return // user cancelled
+      useStore.setState({ fileName: res.name, fileHandle: res.handle })
     } catch (err) {
       alert(t('saveFail') + (err as Error).message)
     }

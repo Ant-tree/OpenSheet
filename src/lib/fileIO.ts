@@ -589,11 +589,24 @@ export async function saveToHandle(
   await writable.close()
 }
 
+/** Result of a Save As: the new name to display, plus a writable handle when
+ * one is available (Chromium) so ⌘S can keep saving in place. */
+export interface SaveAsResult {
+  handle: FileSystemFileHandle | null
+  name: string
+}
+
 /**
- * Save As: prompt for a new filename/location. On Chromium (File System Access)
- * this returns the new writable handle so the app can keep saving in place;
- * elsewhere it downloads a copy and returns null. Returns undefined if the user
- * cancels the picker.
+ * Save As: let the user choose a new name/location, then write there.
+ *
+ * - **Tauri desktop app** — native save dialog + write (WKWebView has no
+ *   `showSaveFilePicker`).
+ * - **Chromium** — File System Access picker; the returned handle lets ⌘S save
+ *   in place afterwards.
+ * - **Other browsers (Safari/Firefox/mobile)** — prompt for a name and download
+ *   with it (no silent default-name download).
+ *
+ * Returns `undefined` if the user cancels.
  */
 export async function saveWorkbookAs(
   hf: HyperFormula,
@@ -601,9 +614,33 @@ export async function saveWorkbookAs(
   fileName: string,
   format: 'xlsx' | 'csv',
   charts?: ChartsBySheet,
-): Promise<FileSystemFileHandle | null | undefined> {
+): Promise<SaveAsResult | undefined> {
   const base = fileName.replace(/\.(xlsx|csv)$/i, '')
   const suggested = `${base}.${format}`
+  const basename = (p: string) => p.split(/[\\/]/).pop() || suggested
+
+  // Tauri desktop: native save dialog + write. Falls through to the browser
+  // paths if the command isn't present (e.g. an older app build).
+  const internals = (
+    window as unknown as {
+      __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> }
+    }
+  ).__TAURI_INTERNALS__
+  if (internals && typeof internals.invoke === 'function') {
+    try {
+      const buf = await workbookBuffer(hf, sheets, format, charts)
+      const path = (await internals.invoke('save_workbook_as', {
+        defaultName: suggested,
+        bytes: Array.from(new Uint8Array(buf)),
+      })) as string | null
+      if (!path) return undefined // user cancelled the dialog
+      return { handle: null, name: basename(path) }
+    } catch {
+      // Command unavailable — fall back to the browser paths below.
+    }
+  }
+
+  // Chromium: File System Access picker (returns a reusable writable handle).
   const picker = (
     window as unknown as {
       showSaveFilePicker?: (opts: unknown) => Promise<FileSystemFileHandle>
@@ -630,11 +667,17 @@ export async function saveWorkbookAs(
       throw err
     }
     await saveToHandle(hf, sheets, handle, charts)
-    return handle
+    return { handle, name: handle.name }
   }
-  // No File System Access API: download a copy.
-  await exportWorkbook(hf, sheets, suggested, format, charts)
-  return null
+
+  // Other browsers: no native "save as" dialog exists — ask for a name so the
+  // download isn't always the default filename, then download.
+  const lang = useLangStore.getState().lang
+  const chosen = window.prompt(t('saveAsPrompt', lang), suggested)
+  if (chosen === null) return undefined
+  const trimmed = chosen.trim() || suggested
+  await exportWorkbook(hf, sheets, trimmed, format, charts)
+  return { handle: null, name: `${trimmed.replace(/\.(xlsx|csv)$/i, '')}.${format}` }
 }
 
 /** Build an exceljs workbook from HyperFormula state + formats (no download). */
