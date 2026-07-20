@@ -53,6 +53,7 @@ npm run preview  # preview the production build
 | **Print / PDF** | Print or export to PDF from the *Save* menu (grid-only print layout) |
 | **Dark mode** | System / light / dark theme, switchable from the status bar |
 | **Multi-language** | English / Korean UI, switchable from the status bar (remembers your choice) |
+| **Installable (PWA)** | Install from the browser to run in its own window and work **offline** (service worker caches the app); desktop Chrome/Edge, Android, iOS |
 
 ## Usage
 
