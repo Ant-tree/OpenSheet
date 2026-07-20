@@ -122,7 +122,12 @@ changing web code, run `npm run cap:sync` (or the `cap:*` scripts, which sync fo
 > - Android builds need **JDK 17+**; Android Studio bundles a suitable one (the Capacitor
 >   CLI may warn about an older system JDK — opening the project in Android Studio resolves it).
 > - **Save in place** (File System Access API) is desktop-Chromium only. On mobile, opening
->   uses the system file picker and saving downloads a copy.
+>   uses the system file picker. In a mobile browser, saving downloads a copy; inside a
+>   Capacitor native app the file is written and opened in the **share sheet** (Save to
+>   Files / send on) via [`@capacitor/filesystem`](https://www.npmjs.com/package/@capacitor/filesystem)
+>   + [`@capacitor/share`](https://www.npmjs.com/package/@capacitor/share) — a web view can't
+>   download a `blob:` URL. These plugins are in `dependencies`, so `npm install` then
+>   `npx cap sync` adds them to the native projects.
 > - **Print / PDF** works in mobile browsers (and the PWA). Inside a Capacitor
 >   native app the wrapped web view doesn't support `window.print()`; install a
 >   Capacitor Printer plugin and the app will use it automatically (see

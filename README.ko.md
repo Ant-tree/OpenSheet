@@ -118,7 +118,12 @@ npm run cap:ios              # → Xcode 열기
 > - 안드로이드 빌드는 **JDK 17+** 가 필요합니다. Android Studio가 자체 JDK를 포함하므로
 >   (CLI가 구형 시스템 JDK 경고를 내도) Android Studio에서 열면 해결됩니다.
 > - **원본에 저장**(File System Access API)은 데스크톱 크로미엄 전용입니다. 모바일에서는
->   열기는 시스템 파일 선택기를, 저장은 사본 다운로드로 동작합니다.
+>   열기는 시스템 파일 선택기를 사용합니다. 모바일 브라우저에서는 저장 시 사본을 다운로드하고,
+>   Capacitor 네이티브 앱에서는 파일을 기록한 뒤 **공유 시트**(파일에 저장 / 전송)로 엽니다
+>   ([`@capacitor/filesystem`](https://www.npmjs.com/package/@capacitor/filesystem) +
+>   [`@capacitor/share`](https://www.npmjs.com/package/@capacitor/share)) — 웹뷰는 `blob:` URL을
+>   다운로드할 수 없기 때문입니다. 이 플러그인들은 `dependencies`에 있으므로 `npm install` 후
+>   `npx cap sync`를 실행하면 네이티브 프로젝트에 추가됩니다.
 > - **인쇄 / PDF**는 모바일 브라우저(및 PWA)에서 동작합니다. Capacitor 네이티브 앱
 >   안에서는 감싼 웹뷰가 `window.print()`를 지원하지 않으므로, Capacitor 프린터
 >   플러그인을 설치하면 앱이 자동으로 사용합니다(`src/lib/print.ts` 참고).

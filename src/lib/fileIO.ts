@@ -15,6 +15,7 @@ import { t, useLangStore } from '../i18n'
 import { strongerBorder } from './format'
 import { opFromExcel, opToExcel } from './condFormat'
 import { chartToSvgString, svgToPngDataUrl } from './chartRender'
+import { saveOnNative } from './nativeSave'
 
 /** sheet id -> charts inserted on it. */
 export type ChartsBySheet = Record<number, ChartSpec[]>
@@ -480,7 +481,21 @@ export async function exportWorkbook(
     format === 'csv'
       ? 'text/csv;charset=utf-8'
       : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  downloadBlob(new Blob([buf], { type }), `${base}.${format}`)
+  await deliverFile(new Blob([buf], { type }), `${base}.${format}`)
+}
+
+/**
+ * Hand a generated file to the user: on a Capacitor native app write it and
+ * open the share sheet (web views can't download `blob:` URLs), otherwise
+ * trigger a normal browser download.
+ */
+async function deliverFile(blob: Blob, filename: string): Promise<void> {
+  try {
+    if (await saveOnNative(blob, filename)) return
+  } catch {
+    // Native save failed/unavailable — fall back to a browser download.
+  }
+  downloadBlob(blob, filename)
 }
 
 /** Serialize the current state into an xlsx/csv byte buffer. */
@@ -668,6 +683,13 @@ export async function saveWorkbookAs(
     }
     await saveToHandle(hf, sheets, handle, charts)
     return { handle, name: handle.name }
+  }
+
+  // Capacitor native app (iOS/Android): no picker/prompt to rely on — write the
+  // file and open the share sheet (the user names/places it there).
+  if ((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) {
+    await exportWorkbook(hf, sheets, suggested, format, charts)
+    return { handle: null, name: suggested }
   }
 
   // Other browsers: no native "save as" dialog exists — ask for a name so the
