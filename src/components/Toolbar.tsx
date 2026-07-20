@@ -135,9 +135,11 @@ const BORDER_LABEL_KEYS = {
 export default function Toolbar({
   onOpenCondFormat,
   onOpenChart,
+  onOpenValidation,
 }: {
   onOpenCondFormat: () => void
   onOpenChart: () => void
+  onOpenValidation: () => void
 }) {
   const t = useT()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -487,6 +489,10 @@ export default function Toolbar({
         <button className="tbtn" title={t('chart')} onClick={onOpenChart}>
           <Icon name="chart" />
           {t('chart')}
+        </button>
+        <button className="tbtn" title={t('dataValidation')} onClick={onOpenValidation}>
+          <Icon name="chevron-down" />
+          {t('dataValidation')}
         </button>
       </div>
 

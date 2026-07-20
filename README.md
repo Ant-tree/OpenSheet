@@ -39,6 +39,7 @@ npm run preview  # preview the production build
 | **Styles round-trip** | Fonts, fills, colors (including theme/indexed), number formats, borders, column widths and row heights are read from and written back to `.xlsx` |
 | **Conditional formatting** | Highlight cells by rule (greater/less than, between, equal, text contains) — evaluated live and round-tripped to `.xlsx` |
 | **Cell notes** | Attach a note to any cell (red corner marker + hover tooltip); saved as `.xlsx` comments |
+| **Data validation** | Give cells a dropdown list of allowed values (picker on the cell) — round-tripped to `.xlsx` |
 | **Rows & columns** | Insert / delete rows and columns from the right-click menu — formulas, merges, notes and rules all shift accordingly |
 | **Find & replace** | `Ctrl/Cmd+F` to find, `Ctrl/Cmd+H` to replace one or all |
 | **Freeze panes** | Freeze leading rows/columns so headers stay visible while scrolling |

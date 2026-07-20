@@ -52,6 +52,12 @@ export interface CondFormatRule {
   color?: string
 }
 
+/** A list data-validation: cells in `range` accept only one of `values` (dropdown). */
+export interface DataValidation {
+  range: MergeRange
+  values: string[]
+}
+
 /** A cell coordinate within a sheet (0-based). */
 export interface CellRef {
   row: number
@@ -73,6 +79,8 @@ export interface SheetMeta {
   notes: Record<string, string>
   /** Conditional-formatting rules, applied in order (later rules win). */
   condFormats: CondFormatRule[]
+  /** List data-validations (dropdown lists). */
+  dataValidations: DataValidation[]
   merges: MergeRange[]
   /** Custom column widths keyed by col index. */
   colWidths: Record<number, number>

@@ -4,6 +4,7 @@ import type {
   BorderSide,
   CellFormat,
   CondFormatRule,
+  DataValidation,
   MergeRange,
   Selection,
   SheetMeta,
@@ -32,6 +33,7 @@ export interface SerializedDoc {
     formats: Record<string, CellFormat>
     notes: Record<string, string>
     condFormats: CondFormatRule[]
+    dataValidations: DataValidation[]
     merges: MergeRange[]
     colWidths: Record<number, number>
     rowHeights: Record<number, number>
@@ -98,6 +100,12 @@ interface StoreState {
   addCondFormat: (rule: CondFormatRule) => void
   /** Remove all conditional-formatting rules from the active sheet. */
   clearCondFormats: () => void
+  /** Add a list data-validation (dropdown) over the current selection. */
+  addDataValidation: (values: string[]) => void
+  /** Remove data-validations overlapping the current selection. */
+  clearDataValidations: () => void
+  /** The dropdown values for a cell, if it has a list validation. */
+  getValidation: (row: number, col: number) => string[] | undefined
 
   mergeSelection: () => void
   unmergeSelection: () => void
@@ -156,6 +164,7 @@ interface StoreState {
       formats?: Record<string, CellFormat>
       notes?: Record<string, string>
       condFormats?: CondFormatRule[]
+      dataValidations?: DataValidation[]
       colWidths?: Record<number, number>
       rowHeights?: Record<number, number>
       frozenRows?: number
@@ -175,7 +184,7 @@ function buildInitial(): { hf: HyperFormula; sheets: SheetMeta[]; activeSheetId:
   hf.addSheet(name)
   const id = hf.getSheetId(name)!
   const sheets: SheetMeta[] = [
-    { id, name, formats: {}, notes: {}, condFormats: [], merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 },
+    { id, name, formats: {}, notes: {}, condFormats: [], dataValidations: [], merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 },
   ]
   return { hf, sheets, activeSheetId: id }
 }
@@ -337,6 +346,40 @@ export const useStore = create<StoreState>((set, get) => {
       bump(set)
     },
 
+    addDataValidation(values) {
+      const clean = values.map((v) => v.trim()).filter((v) => v !== '')
+      if (!clean.length) return
+      pushUndo(set, get)
+      const sheet = get().activeSheet()
+      const b = selectionBounds(get().selection)
+      const range: MergeRange = { top: b.top, left: b.left, bottom: b.bottom, right: b.right }
+      // Drop existing validations that overlap the new range.
+      const kept = sheet.dataValidations.filter((v) => !overlaps(v.range, range))
+      updateSheet(set, get, sheet.id, { dataValidations: [...kept, { range, values: clean }] })
+      bump(set)
+    },
+
+    clearDataValidations() {
+      const sheet = get().activeSheet()
+      const b = selectionBounds(get().selection)
+      const sel: MergeRange = { top: b.top, left: b.left, bottom: b.bottom, right: b.right }
+      const kept = sheet.dataValidations.filter((v) => !overlaps(v.range, sel))
+      if (kept.length === sheet.dataValidations.length) return
+      pushUndo(set, get)
+      updateSheet(set, get, sheet.id, { dataValidations: kept })
+      bump(set)
+    },
+
+    getValidation(row, col) {
+      const sheet = get().activeSheet()
+      for (let i = sheet.dataValidations.length - 1; i >= 0; i--) {
+        const v = sheet.dataValidations[i]
+        const r = v.range
+        if (row >= r.top && row <= r.bottom && col >= r.left && col <= r.right) return v.values
+      }
+      return undefined
+    },
+
     mergeSelection() {
       const sheet = get().activeSheet()
       const b = selectionBounds(get().selection)
@@ -488,6 +531,7 @@ export const useStore = create<StoreState>((set, get) => {
         formats: shiftKeyed(sheet.formats, 'row', map),
         notes: shiftKeyed(sheet.notes, 'row', map),
         condFormats: shiftCondFormats(sheet.condFormats, 'row', at, count, false),
+        dataValidations: shiftValidations(sheet.dataValidations, 'row', at, count, false),
         rowHeights: shiftSizes(sheet.rowHeights, map),
         merges: shiftMergesInsert(sheet.merges, 'row', at, count),
       })
@@ -503,6 +547,7 @@ export const useStore = create<StoreState>((set, get) => {
         formats: shiftKeyed(sheet.formats, 'row', map),
         notes: shiftKeyed(sheet.notes, 'row', map),
         condFormats: shiftCondFormats(sheet.condFormats, 'row', at, count, true),
+        dataValidations: shiftValidations(sheet.dataValidations, 'row', at, count, true),
         rowHeights: shiftSizes(sheet.rowHeights, map),
         merges: shiftMergesDelete(sheet.merges, 'row', at, count),
       })
@@ -518,6 +563,7 @@ export const useStore = create<StoreState>((set, get) => {
         formats: shiftKeyed(sheet.formats, 'col', map),
         notes: shiftKeyed(sheet.notes, 'col', map),
         condFormats: shiftCondFormats(sheet.condFormats, 'col', at, count, false),
+        dataValidations: shiftValidations(sheet.dataValidations, 'col', at, count, false),
         colWidths: shiftSizes(sheet.colWidths, map),
         merges: shiftMergesInsert(sheet.merges, 'col', at, count),
       })
@@ -533,6 +579,7 @@ export const useStore = create<StoreState>((set, get) => {
         formats: shiftKeyed(sheet.formats, 'col', map),
         notes: shiftKeyed(sheet.notes, 'col', map),
         condFormats: shiftCondFormats(sheet.condFormats, 'col', at, count, true),
+        dataValidations: shiftValidations(sheet.dataValidations, 'col', at, count, true),
         colWidths: shiftSizes(sheet.colWidths, map),
         merges: shiftMergesDelete(sheet.merges, 'col', at, count),
       })
@@ -562,6 +609,7 @@ export const useStore = create<StoreState>((set, get) => {
           formats: m.formats,
           notes: m.notes,
           condFormats: m.condFormats,
+          dataValidations: m.dataValidations,
           merges: m.merges,
           colWidths: m.colWidths,
           rowHeights: m.rowHeights,
@@ -582,6 +630,7 @@ export const useStore = create<StoreState>((set, get) => {
         formats: s.formats ?? {},
         notes: s.notes ?? {},
         condFormats: s.condFormats ?? [],
+        dataValidations: s.dataValidations ?? [],
         merges: s.merges ?? [],
         colWidths: s.colWidths ?? {},
         rowHeights: s.rowHeights ?? {},
@@ -613,7 +662,7 @@ export const useStore = create<StoreState>((set, get) => {
       hf.addSheet(name)
       const id = hf.getSheetId(name)!
       set({
-        sheets: [...sheets, { id, name, formats: {}, notes: {}, condFormats: [], merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 }],
+        sheets: [...sheets, { id, name, formats: {}, notes: {}, condFormats: [], dataValidations: [], merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 }],
         activeSheetId: id,
         selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
         filterHeaderRow: null,
@@ -676,6 +725,7 @@ export const useStore = create<StoreState>((set, get) => {
         formats: s.formats ?? {},
         notes: s.notes ?? {},
         condFormats: s.condFormats ?? [],
+        dataValidations: s.dataValidations ?? [],
         merges: s.merges ?? [],
         colWidths: s.colWidths ?? {},
         rowHeights: s.rowHeights ?? {},
@@ -946,6 +996,7 @@ function cloneMeta(m: SheetMeta): SheetMeta {
     formats: structuredClone(m.formats),
     notes: { ...m.notes },
     condFormats: m.condFormats.map((r) => ({ ...r, range: { ...r.range } })),
+    dataValidations: m.dataValidations.map((v) => ({ range: { ...v.range }, values: [...v.values] })),
     merges: m.merges.map((x) => ({ ...x })),
     colWidths: { ...m.colWidths },
     rowHeights: { ...m.rowHeights },
@@ -1080,6 +1131,36 @@ function shiftCondFormats(
     const range =
       axis === 'row' ? { ...m, top: nlo, bottom: nhi } : { ...m, left: nlo, right: nhi }
     out.push({ ...rule, range })
+  }
+  return out
+}
+
+/** Shift data-validation ranges when rows/cols are inserted or deleted. */
+function shiftValidations(
+  items: DataValidation[],
+  axis: 'row' | 'col',
+  at: number,
+  count: number,
+  isDelete: boolean,
+): DataValidation[] {
+  const out: DataValidation[] = []
+  for (const v of items) {
+    const m = v.range
+    const lo = axis === 'row' ? m.top : m.left
+    const hi = axis === 'row' ? m.bottom : m.right
+    let nlo: number
+    let nhi: number
+    if (!isDelete) {
+      nlo = lo >= at ? lo + count : lo
+      nhi = hi >= at ? hi + count : hi
+    } else {
+      nlo = lo < at ? lo : lo < at + count ? at : lo - count
+      nhi = hi < at ? hi : hi < at + count ? at - 1 : hi - count
+      if (nhi < nlo) continue // range fully removed
+    }
+    const range =
+      axis === 'row' ? { ...m, top: nlo, bottom: nhi } : { ...m, left: nlo, right: nhi }
+    out.push({ ...v, range })
   }
   return out
 }

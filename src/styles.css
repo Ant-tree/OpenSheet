@@ -870,3 +870,49 @@ table.grid {
   gap: 6px;
   justify-content: flex-end;
 }
+
+/* Data-validation dropdown (list) */
+.dv-caret {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 18px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: var(--header-bg);
+  color: var(--header-fg);
+  cursor: pointer;
+  z-index: 3;
+}
+.dv-caret:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.dv-pop {
+  position: fixed;
+  z-index: 200;
+  min-width: 120px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--menu-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  padding: 4px;
+  font-size: 13px;
+}
+.dv-item {
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--fg);
+  white-space: nowrap;
+}
+.dv-item:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}

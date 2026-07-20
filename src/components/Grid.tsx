@@ -91,6 +91,18 @@ export default function Grid() {
   )
   const [filterOpen, setFilterOpen] = useState<{ col: number; x: number; y: number } | null>(null)
 
+  // Data-validation dropdown for the active cell.
+  const activeValidation = useMemo(() => {
+    const { row, col } = selection.focus
+    for (let i = sheet.dataValidations.length - 1; i >= 0; i--) {
+      const v = sheet.dataValidations[i]
+      const R = v.range
+      if (row >= R.top && row <= R.bottom && col >= R.left && col <= R.right) return v.values
+    }
+    return undefined
+  }, [sheet.dataValidations, selection.focus])
+  const [dvOpen, setDvOpen] = useState<{ x: number; y: number } | null>(null)
+
   const setSelection = useStore((s) => s.setSelection)
   const setEditing = useStore((s) => s.setEditing)
   const moveSelection = useStore((s) => s.moveSelection)
@@ -631,6 +643,20 @@ export default function Grid() {
                           onCompositionEnd={onCompositionEnd}
                           onBlur={() => commitEdit('none')}
                         />
+                        {activeValidation && !isEditing && (
+                          <button
+                            className="dv-caret"
+                            title={activeValidation.join(', ')}
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                              setDvOpen((cur) => (cur ? null : { x: rect.left, y: rect.bottom }))
+                            }}
+                          >
+                            ▾
+                          </button>
+                        )}
                       </>
                     ) : (
                       text
@@ -674,6 +700,33 @@ export default function Grid() {
             y={filterOpen.y}
             onClose={() => setFilterOpen(null)}
           />
+        </>
+      )}
+      {dvOpen && activeValidation && (
+        <>
+          <div className="menu-backdrop" onMouseDown={() => setDvOpen(null)} />
+          <div
+            className="dv-pop"
+            style={{
+              top: Math.min(dvOpen.y, window.innerHeight - 8),
+              left: Math.min(dvOpen.x, window.innerWidth - 160),
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {activeValidation.map((v) => (
+              <div
+                key={v}
+                className="dv-item"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setCellContent(selection.focus.row, selection.focus.col, v)
+                  setDvOpen(null)
+                }}
+              >
+                {v}
+              </div>
+            ))}
+          </div>
         </>
       )}
       {ac.node}

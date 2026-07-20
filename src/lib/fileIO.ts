@@ -5,6 +5,7 @@ import type {
   CellBorders,
   CellFormat,
   CondFormatRule,
+  DataValidation,
   HAlign,
   MergeRange,
   SheetMeta,
@@ -23,6 +24,8 @@ export interface ImportedSheet {
   notes: Record<string, string>
   /** Conditional-formatting rules. */
   condFormats: CondFormatRule[]
+  /** List data-validations (dropdown lists). */
+  dataValidations: DataValidation[]
   /** Custom column widths in px, keyed by col index. */
   colWidths: Record<number, number>
   /** Custom row heights in px, keyed by row index. */
@@ -203,13 +206,14 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
 
     const merges: MergeRange[] = readMerges(ws)
     const condFormats: CondFormatRule[] = readCondFormats(ws)
+    const dataValidations: DataValidation[] = readDataValidations(ws)
 
     const view = (ws.views ?? [])[0] as { state?: string; xSplit?: number; ySplit?: number } | undefined
     const frozen = view?.state === 'frozen'
     const frozenRows = frozen ? view?.ySplit ?? 0 : 0
     const frozenCols = frozen ? view?.xSplit ?? 0 : 0
 
-    sheets.push({ name: ws.name, rows, merges, formats, notes, condFormats, colWidths, rowHeights, frozenRows, frozenCols })
+    sheets.push({ name: ws.name, rows, merges, formats, notes, condFormats, dataValidations, colWidths, rowHeights, frozenRows, frozenCols })
   })
 
   return { fileName: file.name, sheets }
@@ -409,6 +413,7 @@ function csvToSheet(fileName: string, text: string): ImportedSheet {
     formats: {},
     notes: {},
     condFormats: [],
+    dataValidations: [],
     colWidths: {},
     rowHeights: {},
     frozenRows: 0,
@@ -598,6 +603,7 @@ export function buildWorkbook(
         ;(ws.getCell(r + 1, c + 1) as unknown as { note: string }).note = text
       }
       writeCondFormats(ws, meta.condFormats)
+      writeDataValidations(ws, meta.dataValidations)
       if (meta.frozenRows || meta.frozenCols) {
         ws.views = [{ state: 'frozen', xSplit: meta.frozenCols, ySplit: meta.frozenRows }]
       }
@@ -684,6 +690,70 @@ function writeCondFormats(ws: ExcelJS.Worksheet, rules: CondFormatRule[]) {
     ws.addConditionalFormatting({ ref, rules: [cfRule] } as unknown as Parameters<
       ExcelJS.Worksheet['addConditionalFormatting']
     >[0])
+  }
+}
+
+/** Read list data-validations. ExcelJS expands ranges to per-cell entries, so we
+ * regroup cells that share a value list into contiguous per-column ranges. */
+function readDataValidations(ws: ExcelJS.Worksheet): DataValidation[] {
+  const model = (ws as unknown as { dataValidations?: { model?: Record<string, { type?: string; formulae?: unknown[] }> } })
+    .dataValidations?.model
+  if (!model) return []
+  // valuesKey -> col -> sorted rows
+  const groups = new Map<string, { values: string[]; byCol: Map<number, number[]> }>()
+  for (const addr in model) {
+    const dv = model[addr]
+    if (!dv || dv.type !== 'list') continue
+    const f = Array.isArray(dv.formulae) ? dv.formulae[0] : undefined
+    if (typeof f !== 'string') continue
+    const m = f.match(/^"(.*)"$/s) // inline quoted list only
+    if (!m) continue
+    const values = m[1].split(',').map((s) => s.trim()).filter((s) => s !== '')
+    if (!values.length) continue
+    const cell = decodeA1(addr)
+    if (!cell) continue
+    const vkey = values.join('')
+    let g = groups.get(vkey)
+    if (!g) {
+      g = { values, byCol: new Map() }
+      groups.set(vkey, g)
+    }
+    const rows = g.byCol.get(cell.col) ?? []
+    rows.push(cell.row)
+    g.byCol.set(cell.col, rows)
+  }
+  const out: DataValidation[] = []
+  for (const g of groups.values()) {
+    for (const [col, rows] of g.byCol) {
+      rows.sort((a, b) => a - b)
+      let start = rows[0]
+      let prev = rows[0]
+      const flush = (end: number) =>
+        out.push({ range: { top: start, left: col, bottom: end, right: col }, values: g.values })
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i] === prev + 1) prev = rows[i]
+        else {
+          flush(prev)
+          start = prev = rows[i]
+        }
+      }
+      flush(prev)
+    }
+  }
+  return out
+}
+
+function writeDataValidations(ws: ExcelJS.Worksheet, validations: DataValidation[]) {
+  const dv = (ws as unknown as {
+    dataValidations: { add: (ref: string, rule: Record<string, unknown>) => void }
+  }).dataValidations
+  for (const v of validations) {
+    if (!v.values.length) continue
+    dv.add(encodeA1Range(v.range), {
+      type: 'list',
+      allowBlank: true,
+      formulae: [`"${v.values.join(',')}"`],
+    })
   }
 }
 
