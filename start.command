@@ -26,9 +26,16 @@ if [ ! -d node_modules ]; then
   npm install
 fi
 
-# 3) 개발 서버 실행 (vite가 브라우저를 자동으로 엽니다)
-#    start the dev server — vite opens the browser automatically
+# 3) 최적화된 프로덕션 빌드 생성 / build the optimized production bundle
+#    (개발 서버가 아니라 빌드 결과를 서빙해야 빠릅니다 — 개발 모드는 훨씬 느림)
+#    Serve the built app, NOT the dev server: dev mode (unminified + React
+#    StrictMode double-render) is much slower.
+echo "· 최적화 빌드를 생성합니다 (수십 초 소요될 수 있음)..."
+npm run build
+
+# 4) 미리보기 서버 실행 (vite가 브라우저를 자동으로 엽니다)
+#    serve the build — vite opens the browser automatically
 echo "· 서버를 시작합니다. 종료하려면 이 창에서 Ctrl+C 를 누르세요."
-echo "  주소: http://localhost:5173"
+echo "  주소: http://localhost:4173"
 echo "──────────────────────────────────────────"
-exec npm run dev
+exec npm run preview -- --open
