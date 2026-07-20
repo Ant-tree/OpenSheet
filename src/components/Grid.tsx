@@ -13,6 +13,7 @@ import { colToLetter, isInSelection, key, selectionBounds } from '../lib/utils'
 import type { BorderSide, CellBorders, CellFormat, MergeRange } from '../types'
 import ContextMenu from './ContextMenu'
 import { useFormulaAutocomplete } from './FormulaAutocomplete'
+import FilterDropdown from './FilterDropdown'
 
 /**
  * Compute the borders to actually paint for a rendered cell (a normal cell, or
@@ -72,12 +73,23 @@ function rangeA1(a: { row: number; col: number }, b: { row: number; col: number 
 }
 
 export default function Grid() {
-  useStore((s) => s.rev) // subscribe so the grid re-renders on every data change
+  const rev = useStore((s) => s.rev) // subscribe so the grid re-renders on every data change
   const selection = useStore((s) => s.selection)
   const editing = useStore((s) => s.editing)
   const activeSheetId = useStore((s) => s.activeSheetId)
   const sheets = useStore((s) => s.sheets)
   const sheet = useMemo(() => sheets.find((x) => x.id === activeSheetId)!, [sheets, activeSheetId])
+
+  // AutoFilter view state.
+  const filterHeaderRow = useStore((s) => s.filterHeaderRow)
+  const filterCols = useStore((s) => s.filterCols)
+  const columnFilters = useStore((s) => s.columnFilters)
+  const hiddenRows = useMemo(
+    () => useStore.getState().hiddenRows(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rev, filterHeaderRow, columnFilters],
+  )
+  const [filterOpen, setFilterOpen] = useState<{ col: number; x: number; y: number } | null>(null)
 
   const setSelection = useStore((s) => s.setSelection)
   const setEditing = useStore((s) => s.setEditing)
@@ -500,7 +512,8 @@ export default function Grid() {
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: MAX_ROWS }, (_, r) => (
+          {Array.from({ length: MAX_ROWS }, (_, r) =>
+            hiddenRows.has(r) ? null : (
             <tr key={r}>
               <th
                 className={`rowhead${r >= bounds.top && r <= bounds.bottom ? ' sel' : ''}`}
@@ -539,6 +552,8 @@ export default function Grid() {
                 const isFillCorner = !isEditing && r === bounds.bottom && c === bounds.right
                 const fmt = sheet.formats[k]
                 const note = sheet.notes[k]
+                const isFilterHeader = filterHeaderRow === r && filterCols.includes(c)
+                const hasColFilter = !!columnFilters[c]
                 const computed = useStore.getState().getComputed(r, c)
                 const text = displayValue(computed, fmt)
                 const isNum = typeof computed === 'number'
@@ -566,7 +581,7 @@ export default function Grid() {
                   if (bd.bottom) style.borderBottom = borderCss(bd.bottom)
                   if (bd.right) style.borderRight = borderCss(bd.right)
                 }
-                if (isFillCorner || note) style.position = 'relative'
+                if (isFillCorner || note || isFilterHeader) style.position = 'relative'
                 const frozenR = r < frozenRows
                 const frozenC = c < frozenCols
                 if (frozenR || frozenC) {
@@ -621,6 +636,22 @@ export default function Grid() {
                       text
                     )}
                     {note && <span className="note-marker" title={note} />}
+                    {isFilterHeader && (
+                      <button
+                        className={`filter-caret${hasColFilter ? ' active' : ''}`}
+                        title="Filter"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          setFilterOpen((cur) =>
+                            cur?.col === c ? null : { col: c, x: rect.left, y: rect.bottom },
+                          )
+                        }}
+                      >
+                        ▾
+                      </button>
+                    )}
                     {isFillCorner && (
                       <div className="fill-handle" onMouseDown={onFillStart} />
                     )}
@@ -633,6 +664,17 @@ export default function Grid() {
       </table>
       {ctxMenu && (
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={() => setCtxMenu(null)} />
+      )}
+      {filterOpen && (
+        <>
+          <div className="menu-backdrop" onMouseDown={() => setFilterOpen(null)} />
+          <FilterDropdown
+            col={filterOpen.col}
+            x={filterOpen.x}
+            y={filterOpen.y}
+            onClose={() => setFilterOpen(null)}
+          />
+        </>
       )}
       {ac.node}
     </div>

@@ -145,6 +145,8 @@ export default function Toolbar({
   const mergeSelection = useStore((s) => s.mergeSelection)
   const unmergeSelection = useStore((s) => s.unmergeSelection)
   const sortSelection = useStore((s) => s.sortSelection)
+  const toggleFilter = useStore((s) => s.toggleFilter)
+  const filterActive = useStore((s) => s.filterHeaderRow !== null)
   const applyBorders = useStore((s) => s.applyBorders)
   const setFreeze = useStore((s) => s.setFreeze)
   const loadWorkbook = useStore((s) => s.loadWorkbook)
@@ -466,6 +468,14 @@ export default function Toolbar({
         </button>
         <button className="tbtn" title={t('sortDesc')} onClick={() => sortSelection(false)}>
           <Icon name="sort-desc" />
+        </button>
+        <button
+          className={`tbtn${filterActive ? ' active' : ''}`}
+          title={t('filter')}
+          onClick={toggleFilter}
+        >
+          <Icon name="filter" />
+          {t('filter')}
         </button>
       </div>
 

@@ -46,6 +46,7 @@ npm run preview  # preview the production build
 | **Undo / redo** | Full history for content, formatting, borders, merges, notes, rules and sorting |
 | **Clipboard** | Copy · cut · paste over a range as TSV — formats are kept when pasting within the app, and it interoperates with Excel/Sheets |
 | **Sorting** | Sort a selected range by its key column — relative formula references are automatically re-based by how far each row moved |
+| **AutoFilter** | Turn a selection into a filter (header row gets dropdowns); pick values per column to show/hide matching rows |
 | **Charts** | Turn a selected range into a bar / line / pie chart (labels from the first column, series from the header row) |
 | **Multiple sheets** | Add / delete / rename sheet tabs, with cross-sheet references |
 | **File I/O** | Open and save `.xlsx` / `.csv`; **Save in place** overwrites the opened file (Chromium browsers) or downloads a copy |

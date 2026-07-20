@@ -17,6 +17,7 @@ import {
   shiftFormulaRowRefs,
 } from '../lib/utils'
 import { detectLang, t } from '../i18n'
+import { displayValue } from '../lib/format'
 
 export type BorderPreset = 'all' | 'outer' | 'top' | 'bottom' | 'left' | 'right' | 'none'
 
@@ -61,6 +62,11 @@ interface StoreState {
   activeSheetId: number
   selection: Selection
   editing: { row: number; col: number } | null
+  /** AutoFilter (view-only): header row + filterable columns, or null when off. */
+  filterHeaderRow: number | null
+  filterCols: number[]
+  /** Per-column allowed display values; a column absent here is unfiltered. */
+  columnFilters: Record<number, string[]>
   fileName: string
   /** Writable handle to the opened file (File System Access API), when available. */
   fileHandle: FileSystemFileHandle | null
@@ -99,6 +105,15 @@ interface StoreState {
 
   setColWidth: (col: number, width: number) => void
   setRowHeight: (row: number, height: number) => void
+
+  /** Toggle AutoFilter over the current selection (top row = headers). */
+  toggleFilter: () => void
+  /** Restrict a filtered column to `allowed` display values (null clears it). */
+  setColumnFilter: (col: number, allowed: string[] | null) => void
+  /** Distinct display values in a column below the filter header row. */
+  columnValues: (col: number) => string[]
+  /** Rows currently hidden by the active filters. */
+  hiddenRows: () => Set<number>
 
   insertRows: (at: number, count?: number) => void
   deleteRows: (at: number, count?: number) => void
@@ -174,6 +189,9 @@ export const useStore = create<StoreState>((set, get) => {
     activeSheetId: initial.activeSheetId,
     selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
     editing: null,
+    filterHeaderRow: null,
+    filterCols: [],
+    columnFilters: {},
     fileName: t('defaultFileName', detectLang()),
     fileHandle: null,
     rev: 0,
@@ -408,6 +426,59 @@ export const useStore = create<StoreState>((set, get) => {
       })
     },
 
+    toggleFilter() {
+      if (get().filterHeaderRow !== null) {
+        set({ filterHeaderRow: null, filterCols: [], columnFilters: {} })
+      } else {
+        const b = selectionBounds(get().selection)
+        const cols: number[] = []
+        for (let c = b.left; c <= b.right; c++) cols.push(c)
+        set({ filterHeaderRow: b.top, filterCols: cols, columnFilters: {} })
+      }
+      bump(set)
+    },
+
+    setColumnFilter(col, allowed) {
+      const next = { ...get().columnFilters }
+      if (allowed === null) delete next[col]
+      else next[col] = allowed
+      set({ columnFilters: next })
+      bump(set)
+    },
+
+    columnValues(col) {
+      const { hf, activeSheetId, filterHeaderRow } = get()
+      if (filterHeaderRow === null) return []
+      const sheet = get().activeSheet()
+      const height = hf.getSheetDimensions(activeSheetId).height
+      const seen = new Set<string>()
+      for (let r = filterHeaderRow + 1; r < height; r++) {
+        const disp = displayValue(hf.getCellValue({ sheet: activeSheetId, row: r, col }), sheet.formats[key(r, col)])
+        seen.add(disp)
+      }
+      return [...seen].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    },
+
+    hiddenRows() {
+      const { hf, activeSheetId, filterHeaderRow, columnFilters } = get()
+      const hidden = new Set<number>()
+      const cols = Object.keys(columnFilters).map(Number)
+      if (filterHeaderRow === null || !cols.length) return hidden
+      const sheet = get().activeSheet()
+      const height = hf.getSheetDimensions(activeSheetId).height
+      for (let r = filterHeaderRow + 1; r < height; r++) {
+        for (const col of cols) {
+          const allowed = columnFilters[col]
+          const disp = displayValue(hf.getCellValue({ sheet: activeSheetId, row: r, col }), sheet.formats[key(r, col)])
+          if (!allowed.includes(disp)) {
+            hidden.add(r)
+            break
+          }
+        }
+      }
+      return hidden
+    },
+
     insertRows(at, count = 1) {
       pushUndo(set, get)
       const sheet = get().activeSheet()
@@ -525,6 +596,9 @@ export const useStore = create<StoreState>((set, get) => {
         editing: null,
         fileName: data.fileName,
         fileHandle: null,
+        filterHeaderRow: null,
+        filterCols: [],
+        columnFilters: {},
         past: [],
         future: [],
         rev: get().rev + 1,
@@ -542,6 +616,9 @@ export const useStore = create<StoreState>((set, get) => {
         sheets: [...sheets, { id, name, formats: {}, notes: {}, condFormats: [], merges: [], colWidths: {}, rowHeights: {}, frozenRows: 0, frozenCols: 0 }],
         activeSheetId: id,
         selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
+        filterHeaderRow: null,
+        filterCols: [],
+        columnFilters: {},
         past: [],
         future: [],
       })
@@ -557,6 +634,9 @@ export const useStore = create<StoreState>((set, get) => {
       set({
         sheets: remaining,
         activeSheetId: get().activeSheetId === id ? remaining[0].id : get().activeSheetId,
+        filterHeaderRow: null,
+        filterCols: [],
+        columnFilters: {},
         past: [],
         future: [],
       })
@@ -578,6 +658,9 @@ export const useStore = create<StoreState>((set, get) => {
         activeSheetId: id,
         selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
         editing: null,
+        filterHeaderRow: null,
+        filterCols: [],
+        columnFilters: {},
       })
     },
 
@@ -608,6 +691,9 @@ export const useStore = create<StoreState>((set, get) => {
         editing: null,
         fileName,
         fileHandle: null,
+        filterHeaderRow: null,
+        filterCols: [],
+        columnFilters: {},
         rev: get().rev + 1,
         past: [],
         future: [],
