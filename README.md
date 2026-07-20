@@ -124,6 +124,38 @@ changing web code, run `npm run cap:sync` (or the `cap:*` scripts, which sync fo
 > - **Save in place** (File System Access API) is desktop-Chromium only. On mobile, opening
 >   uses the system file picker and saving downloads a copy.
 
+## Desktop app (macOS / Windows / Linux)
+
+OpenSheet can be packaged as a small native desktop app with [Tauri](https://tauri.app/).
+Just like the mobile apps, it runs the same web build inside the OS's own web view
+(WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux) instead of bundling a
+browser — so the app stays tiny (**~5–15 MB**, versus ~150 MB for an Electron build).
+
+**One-time setup:** install the [Rust toolchain](https://www.rust-lang.org/tools/install)
+(`rustup`) and your platform's [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
+On macOS that's just Xcode Command Line Tools (`xcode-select --install`).
+
+**Run & build:**
+
+```bash
+npm run tauri dev      # develop in a native window (hot reload)
+npm run tauri build    # produce the native app + installer
+```
+
+The build outputs to `src-tauri/target/release/bundle/`:
+
+- **macOS** — `macos/OpenSheet.app` and `dmg/OpenSheet_<version>_*.dmg`
+- **Windows** — `msi/` and `nsis/` installers
+- **Linux** — `deb/`, `rpm/`, `appimage/`
+
+App id (`com.anttree.opensheet`), window size and bundle settings live in
+[`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json). Icons are in `src-tauri/icons/` —
+regenerate them from a source PNG with `npm run tauri icon <path/to/icon.png>`.
+
+> Unsigned builds run locally (right-click ▸ Open on macOS to bypass Gatekeeper the first
+> time). To distribute widely, code-sign & notarize (macOS) or sign (Windows) per the
+> [Tauri distribution guide](https://v2.tauri.app/distribute/).
+
 ## Tech stack
 
 - **Vite + React + TypeScript** — UI and grid rendering

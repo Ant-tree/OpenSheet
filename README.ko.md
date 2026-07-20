@@ -120,6 +120,38 @@ npm run cap:ios              # → Xcode 열기
 > - **원본에 저장**(File System Access API)은 데스크톱 크로미엄 전용입니다. 모바일에서는
 >   열기는 시스템 파일 선택기를, 저장은 사본 다운로드로 동작합니다.
 
+## 데스크톱 앱 (macOS / Windows / Linux)
+
+[Tauri](https://tauri.app/)로 OpenSheet를 **작은 네이티브 데스크톱 앱**으로 패키징할 수
+있습니다. 모바일 앱과 똑같이, 브라우저를 번들하지 않고 **OS 기본 웹뷰**
+(macOS=WKWebView, Windows=WebView2, Linux=WebKitGTK)에서 같은 웹 빌드를 실행하므로
+앱이 아주 가볍습니다 (**~5–15MB**, Electron 방식의 ~150MB와 대조적).
+
+**최초 1회 설정:** [Rust 툴체인](https://www.rust-lang.org/tools/install)(`rustup`)과
+플랫폼별 [Tauri 사전 요구사항](https://v2.tauri.app/start/prerequisites/)을 설치합니다.
+macOS는 Xcode Command Line Tools(`xcode-select --install`)만 있으면 됩니다.
+
+**실행 & 빌드:**
+
+```bash
+npm run tauri dev      # 네이티브 창에서 개발(핫 리로드)
+npm run tauri build    # 네이티브 앱 + 설치파일 생성
+```
+
+빌드 결과는 `src-tauri/target/release/bundle/` 에 생성됩니다:
+
+- **macOS** — `macos/OpenSheet.app`, `dmg/OpenSheet_<버전>_*.dmg`
+- **Windows** — `msi/`, `nsis/` 설치파일
+- **Linux** — `deb/`, `rpm/`, `appimage/`
+
+앱 ID(`com.anttree.opensheet`)·창 크기·번들 설정은
+[`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json) 에 있습니다. 아이콘은
+`src-tauri/icons/` 에 있고, 소스 PNG로부터 `npm run tauri icon <경로>` 로 다시 만들 수 있습니다.
+
+> 서명 없는 빌드도 로컬에서 실행됩니다(macOS는 최초 실행 시 우클릭 ▸ 열기로 Gatekeeper
+> 우회). 널리 배포하려면 [Tauri 배포 가이드](https://v2.tauri.app/distribute/)에 따라
+> 코드 서명·공증(macOS)/서명(Windows)을 하세요.
+
 ## 기술 스택
 
 - **Vite + React + TypeScript** — UI와 그리드 렌더링
