@@ -213,6 +213,28 @@ npm run tauri build -- --target universal-apple-darwin
 > 우회). 널리 배포하려면 [Tauri 배포 가이드](https://v2.tauri.app/distribute/)에 따라
 > 코드 서명·공증(macOS)/서명(Windows)을 하세요.
 
+## 버전 관리 & 릴리스
+
+버전은 여러 파일에 두 가지 체계로 나뉘어 있습니다 — 데스크톱/웹은 semver
+(`package.json`, `src-tauri/tauri.conf.json`, `Cargo.toml`/`Cargo.lock`), 모바일은 마케팅
+버전(`android/app/build.gradle`, iOS 프로젝트). [`scripts/`](scripts) 의 두 스크립트가 이를
+한 번에 맞춰 줍니다:
+
+```bash
+# 모든 파일을 한 번에 올림 (커밋은 안 함)
+npm run bump -- patch                 # 0.1.1 -> 0.1.2 (데스크톱/웹)
+npm run bump -- 0.2.0 --mobile 1.2    # 두 체계를 명시적으로 지정
+npm run bump -- --mobile 1.2          # 모바일만 (Android versionCode·iOS 빌드번호 자동 증가)
+
+# 릴리스: 버전 올림 + 커밋 + 주석 태그 (작업 트리가 깨끗해야 함)
+npm run release -- patch                      # "Release v0.1.2" 커밋, v0.1.2 태그
+npm run release -- 0.2.0 --mobile 1.2 --push  # ...그리고 커밋·태그 푸시
+npm run release -- patch --dry-run            # 미리보기만, 아무것도 안 바꿈
+```
+
+`<desktop>` 는 명시적 `x.y.z` 또는 `patch`/`minor`/`major`, `--mobile` 은 명시적 버전을
+받습니다. `release` 플래그: `--push`, `--no-tag`, `--dry-run`.
+
 ## 기술 스택
 
 - **Vite + React + TypeScript** — UI와 그리드 렌더링

@@ -218,6 +218,28 @@ regenerate them from a source PNG with `npm run tauri icon <path/to/icon.png>`.
 > time). To distribute widely, code-sign & notarize (macOS) or sign (Windows) per the
 > [Tauri distribution guide](https://v2.tauri.app/distribute/).
 
+## Versioning & releases
+
+The version is pinned in several files across two independent schemes — desktop/web use
+semver (`package.json`, `src-tauri/tauri.conf.json`, `Cargo.toml`/`Cargo.lock`) and mobile
+uses a marketing version (`android/app/build.gradle`, the iOS project). Two scripts in
+[`scripts/`](scripts) keep them in sync:
+
+```bash
+# Bump every file at once (no commit)
+npm run bump -- patch                 # 0.1.1 -> 0.1.2 (desktop/web)
+npm run bump -- 0.2.0 --mobile 1.2    # set both schemes explicitly
+npm run bump -- --mobile 1.2          # mobile only (Android versionCode + iOS build auto-increment)
+
+# Cut a release: bump + commit + annotated tag (working tree must be clean)
+npm run release -- patch                      # commit "Release v0.1.2", tag v0.1.2
+npm run release -- 0.2.0 --mobile 1.2 --push  # ...and push commit + tag
+npm run release -- patch --dry-run            # preview only, change nothing
+```
+
+`<desktop>` accepts an explicit `x.y.z` or `patch`/`minor`/`major`; `--mobile` takes an
+explicit version. `release` flags: `--push`, `--no-tag`, `--dry-run`.
+
 ## Tech stack
 
 - **Vite + React + TypeScript** — UI and grid rendering
