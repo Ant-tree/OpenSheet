@@ -130,9 +130,44 @@ npm run cap:ios              # → Xcode 열기
 (macOS=WKWebView, Windows=WebView2, Linux=WebKitGTK)에서 같은 웹 빌드를 실행하므로
 앱이 아주 가볍습니다 (**~5–15MB**, Electron 방식의 ~150MB와 대조적).
 
-**최초 1회 설정:** [Rust 툴체인](https://www.rust-lang.org/tools/install)(`rustup`)과
-플랫폼별 [Tauri 사전 요구사항](https://v2.tauri.app/start/prerequisites/)을 설치합니다.
-macOS는 Xcode Command Line Tools(`xcode-select --install`)만 있으면 됩니다.
+### 사전 요구사항
+
+1. **Node.js 18+** — 웹 빌드용 (저장소 루트에서 `npm install`).
+2. **Rust 툴체인**(`rustc` + `cargo`) — [`rustup`](https://www.rust-lang.org/tools/install)으로 설치:
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   source "$HOME/.cargo/env"        # 또는 새 터미널 열기
+   rustc --version                  # 확인 (cargo 포함)
+   ```
+3. **플랫폼별 [Tauri 사전 요구사항](https://v2.tauri.app/start/prerequisites/):**
+   - **macOS** — Xcode Command Line Tools: `xcode-select --install`
+   - **Linux** — WebKitGTK 및 빌드 도구. 예) Debian/Ubuntu:
+     ```bash
+     sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
+       libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+     ```
+   - **Windows** — [WebView2 런타임](https://developer.microsoft.com/microsoft-edge/webview2/)(윈도우 11엔 기본 포함)과 **MSVC C++ Build Tools**.
+
+### 의존성
+
+- **npm** — Tauri CLI([`@tauri-apps/cli`](https://www.npmjs.com/package/@tauri-apps/cli))가
+  이미 `devDependencies`에 있으므로, 저장소 루트에서 `npm install`만 하면 됩니다. Tauri는 `npm run tauri …`로 실행합니다.
+- **Rust 크레이트** ([`src-tauri/Cargo.toml`](src-tauri/Cargo.toml)에 선언 — 첫 `tauri dev`/`build` 시
+  `cargo`가 자동으로 내려받아 빌드하므로 수동 설치 불필요):
+  - [`tauri`](https://crates.io/crates/tauri) — 데스크톱 런타임
+  - [`tauri-plugin-log`](https://crates.io/crates/tauri-plugin-log) — 개발 빌드 로깅
+  - [`tauri-plugin-dialog`](https://crates.io/crates/tauri-plugin-dialog) — 네이티브 **다른 이름으로 저장** 대화상자
+  - [`serde`](https://crates.io/crates/serde) / [`serde_json`](https://crates.io/crates/serde_json) — 명령 (역)직렬화
+
+  또한 [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs)에 네이티브 명령 두 개가 정의되어 있습니다 — `print_page`
+  (웹뷰가 `window.print()`를 지원하지 않아 네이티브 인쇄) 와 `save_workbook_as`(네이티브 다른 이름으로 저장) —
+  권한은 [`src-tauri/capabilities/default.json`](src-tauri/capabilities/default.json)에 있습니다.
+
+### 설치 & 빌드
+
+```bash
+npm install            # 웹 의존성 + Tauri CLI (저장소 루트에서 최초 1회)
+```
 
 **실행 & 빌드:**
 

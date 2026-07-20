@@ -135,9 +135,44 @@ Just like the mobile apps, it runs the same web build inside the OS's own web vi
 (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux) instead of bundling a
 browser — so the app stays tiny (**~5–15 MB**, versus ~150 MB for an Electron build).
 
-**One-time setup:** install the [Rust toolchain](https://www.rust-lang.org/tools/install)
-(`rustup`) and your platform's [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
-On macOS that's just Xcode Command Line Tools (`xcode-select --install`).
+### Prerequisites
+
+1. **Node.js 18+** — for the web build (`npm install` at the repo root).
+2. **Rust toolchain** (`rustc` + `cargo`), installed via [`rustup`](https://www.rust-lang.org/tools/install):
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   source "$HOME/.cargo/env"        # or open a new terminal
+   rustc --version                  # verify (cargo is included)
+   ```
+3. **Platform [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/):**
+   - **macOS** — Xcode Command Line Tools: `xcode-select --install`
+   - **Linux** — WebKitGTK & build tools, e.g. on Debian/Ubuntu:
+     ```bash
+     sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
+       libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+     ```
+   - **Windows** — [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (preinstalled on Win 11) and the **MSVC C++ Build Tools**.
+
+### Dependencies
+
+- **npm** — the Tauri CLI ([`@tauri-apps/cli`](https://www.npmjs.com/package/@tauri-apps/cli)) is
+  already in `devDependencies`, so `npm install` at the repo root sets it up. Run Tauri via `npm run tauri …`.
+- **Rust crates** (declared in [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml) — `cargo` downloads and
+  builds them automatically on the first `tauri dev`/`build`, no manual install):
+  - [`tauri`](https://crates.io/crates/tauri) — the desktop runtime
+  - [`tauri-plugin-log`](https://crates.io/crates/tauri-plugin-log) — logging in dev builds
+  - [`tauri-plugin-dialog`](https://crates.io/crates/tauri-plugin-dialog) — the native **Save As** dialog
+  - [`serde`](https://crates.io/crates/serde) / [`serde_json`](https://crates.io/crates/serde_json) — command (de)serialization
+
+  The app also defines two native commands in [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs) — `print_page`
+  (native printing, since web views don't support `window.print()`) and `save_workbook_as` (native Save As) —
+  with their permissions in [`src-tauri/capabilities/default.json`](src-tauri/capabilities/default.json).
+
+### Install & build
+
+```bash
+npm install            # web deps + Tauri CLI (run once, at the repo root)
+```
 
 **Run & build:**
 
