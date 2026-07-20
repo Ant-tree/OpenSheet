@@ -132,7 +132,13 @@ const BORDER_LABEL_KEYS = {
   none: 'borderNone',
 } as const
 
-export default function Toolbar({ onOpenCondFormat }: { onOpenCondFormat: () => void }) {
+export default function Toolbar({
+  onOpenCondFormat,
+  onOpenChart,
+}: {
+  onOpenCondFormat: () => void
+  onOpenChart: () => void
+}) {
   const t = useT()
   const fileRef = useRef<HTMLInputElement>(null)
   const applyFormat = useStore((s) => s.applyFormat)
@@ -467,6 +473,10 @@ export default function Toolbar({ onOpenCondFormat }: { onOpenCondFormat: () => 
         <button className="tbtn" title={t('condFormatHint')} onClick={onOpenCondFormat}>
           <Icon name="cond-format" />
           {t('condFormat')}
+        </button>
+        <button className="tbtn" title={t('chart')} onClick={onOpenChart}>
+          <Icon name="chart" />
+          {t('chart')}
         </button>
       </div>
 
