@@ -24,7 +24,6 @@ export default function FormulaBar() {
 
   const ac = useFormulaAutocomplete({
     inputRef,
-    value,
     active: focused,
     apply: (next, caret) => {
       setValue(next)
@@ -52,7 +51,10 @@ export default function FormulaBar() {
         className="formula-input"
         value={value}
         placeholder={t('formulaPlaceholder')}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          setValue(e.target.value)
+          ac.reposition()
+        }}
         onFocus={() => setFocused(true)}
         onBlur={commit}
         onSelect={ac.reposition}

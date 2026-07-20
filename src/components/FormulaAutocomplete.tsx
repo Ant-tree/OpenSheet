@@ -4,7 +4,6 @@ import { argHint, funcTokenAt, matchFunctions } from '../lib/formula'
 
 interface Options {
   inputRef: RefObject<HTMLInputElement>
-  value: string
   /** Only compute while this input is the active formula editor. */
   active: boolean
   /** Replace the input's value and place the caret. */
@@ -27,13 +26,16 @@ const EMPTY: PopState = { items: [], idx: 0, hint: null, tokenStart: -1, top: 0,
  * popup node to render, a keydown handler (returns true when it consumed the
  * event), and a `reposition` callback to call on caret moves.
  */
-export function useFormulaAutocomplete({ inputRef, value, active, apply }: Options) {
+export function useFormulaAutocomplete({ inputRef, active, apply }: Options) {
   const [pop, setPop] = useState<PopState>(EMPTY)
   const popRef = useRef(pop)
   popRef.current = pop
 
+  // Read the current text straight from the input's DOM value, so the host input
+  // can be uncontrolled (typing then costs no React re-render of the host).
   const recompute = useCallback(() => {
     const el = inputRef.current
+    const value = el?.value ?? ''
     if (!el || !active || !value.startsWith('=')) {
       setPop(EMPTY)
       return
@@ -55,16 +57,19 @@ export function useFormulaAutocomplete({ inputRef, value, active, apply }: Optio
       top: Math.min(r.bottom, window.innerHeight - 8),
       left: Math.min(r.left, window.innerWidth - 240),
     }))
-  }, [inputRef, value, active])
+  }, [inputRef, active])
 
+  // Clear the popup whenever this input stops being the active editor. Live
+  // updates are driven by the host calling `reposition()` on change/select.
   useEffect(() => {
-    recompute()
-  }, [recompute])
+    if (!active) setPop(EMPTY)
+  }, [active])
 
   const applyName = useCallback(
     (name: string) => {
       const el = inputRef.current
       if (!el) return
+      const value = el.value
       const caret = el.selectionStart ?? value.length
       const tok = funcTokenAt(value, caret)
       const start = tok ? tok.start : caret
@@ -73,7 +78,7 @@ export function useFormulaAutocomplete({ inputRef, value, active, apply }: Optio
       apply(next, start + insert.length)
       setPop(EMPTY)
     },
-    [inputRef, value, apply],
+    [inputRef, apply],
   )
 
   const onKeyDown = useCallback(

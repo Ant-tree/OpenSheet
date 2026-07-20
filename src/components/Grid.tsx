@@ -197,7 +197,10 @@ export default function Grid() {
   const setColWidth = useStore((s) => s.setColWidth)
 
   const dragging = useRef(false)
-  const [editBuffer, setEditBuffer] = useState('')
+  // The edit text lives in a ref, and the cell <input> is uncontrolled, so
+  // typing doesn't re-render the grid — only committing (which bumps `rev`) does.
+  const editValueRef = useRef('')
+  const pendingInit = useRef<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   // Formula "point mode": while editing a =formula, clicking/dragging cells
@@ -247,9 +250,15 @@ export default function Grid() {
 
   const composingRef = useRef(false)
 
+  const clearInput = () => {
+    editValueRef.current = ''
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
   const enterEdit = useCallback(
     (row: number, col: number) => {
-      setEditBuffer(useStore.getState().getRaw(row, col))
+      // Seed the uncontrolled input once it mounts for the editing cell.
+      pendingInit.current = useStore.getState().getRaw(row, col)
       setEditing({ row, col })
     },
     [setEditing],
@@ -259,20 +268,20 @@ export default function Grid() {
     (move: 'down' | 'right' | 'none') => {
       const ed = useStore.getState().editing
       if (!ed) return
-      setCellContent(ed.row, ed.col, editBuffer)
+      setCellContent(ed.row, ed.col, editValueRef.current)
       setEditing(null)
-      setEditBuffer('')
+      clearInput()
       pointAnchor.current = null
       refRange.current = null
       if (move === 'down') moveSelection(1, 0, false)
       else if (move === 'right') moveSelection(0, 1, false)
     },
-    [editBuffer, setCellContent, setEditing, moveSelection],
+    [setCellContent, setEditing, moveSelection],
   )
 
   const cancelEdit = useCallback(() => {
     setEditing(null)
-    setEditBuffer('')
+    clearInput()
     pointAnchor.current = null
     refRange.current = null
   }, [setEditing])
@@ -297,7 +306,8 @@ export default function Grid() {
     }
     const next = buf.slice(0, start) + ref + buf.slice(end)
     refRange.current = { start, end: start + ref.length }
-    setEditBuffer(next)
+    editValueRef.current = next
+    input.value = next
     const caret = start + ref.length
     requestAnimationFrame(() => {
       const el = inputRef.current
@@ -311,11 +321,11 @@ export default function Grid() {
   // Formula function-name autocomplete + argument hint for the cell editor.
   const ac = useFormulaAutocomplete({
     inputRef,
-    value: editBuffer,
     active: !!editing,
     apply: (next, caret) => {
       refRange.current = null
-      setEditBuffer(next)
+      editValueRef.current = next
+      if (inputRef.current) inputRef.current.value = next
       requestAnimationFrame(() => {
         const el = inputRef.current
         if (el) {
@@ -332,6 +342,13 @@ export default function Grid() {
   useLayoutEffect(() => {
     const el = inputRef.current
     if (!el) return
+    // Seed the uncontrolled input's value when an edit starts (double-click /
+    // Enter / F2). First-keystroke edits have no pending value (already typed).
+    if (editing && pendingInit.current != null) {
+      el.value = pendingInit.current
+      editValueRef.current = pendingInit.current
+      pendingInit.current = null
+    }
     el.focus({ preventScroll: true })
     if (editing) {
       const len = el.value.length
@@ -344,11 +361,13 @@ export default function Grid() {
   // browser/IME inserts the character naturally — no duplication, IME-safe.
   const onEditorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!useStore.getState().editing) {
+      pendingInit.current = null // the char is already in the input
       setEditing({ row: selection.focus.row, col: selection.focus.col })
     }
     // The user typed, so any auto-inserted reference is now committed text.
     refRange.current = null
-    setEditBuffer(e.target.value)
+    editValueRef.current = e.target.value
+    ac.reposition() // refresh the autocomplete popup (no grid re-render for plain text)
   }
 
   const onEditorKeyDown = (e: React.KeyboardEvent) => {
@@ -731,7 +750,6 @@ export default function Grid() {
                         <input
                           ref={inputRef}
                           className={`cell-input${isEditing ? ' editing' : ''}`}
-                          value={isEditing ? editBuffer : ''}
                           onChange={onEditorChange}
                           onKeyDown={onEditorKeyDown}
                           onSelect={ac.reposition}
