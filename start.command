@@ -20,11 +20,12 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 echo "✓ Node.js $(node -v)"
 
-# 2) 의존성 설치 (최초 1회) / install dependencies on first run
-if [ ! -d node_modules ]; then
-  echo "· 최초 실행: 의존성을 설치합니다 (수 분 소요될 수 있음)..."
-  npm install
-fi
+# 2) 의존성 확인/설치 / ensure dependencies are installed and up to date
+#    매번 실행: 이미 최신이면 거의 즉시 끝나고, 새로 추가된 의존성도 자동 설치됩니다.
+#    Run every time: near-instant when already up to date, and it also pulls in
+#    any dependency added since the last run (e.g. after a git pull).
+echo "· 의존성을 확인/설치합니다 (최초 실행은 수 분 소요될 수 있음)..."
+npm install
 
 # 3) 최적화된 프로덕션 빌드 생성 / build the optimized production bundle
 #    (개발 서버가 아니라 빌드 결과를 서빙해야 빠릅니다 — 개발 모드는 훨씬 느림)
