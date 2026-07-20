@@ -148,6 +148,24 @@ The build outputs to `src-tauri/target/release/bundle/`:
 - **Windows** — `msi/` and `nsis/` installers
 - **Linux** — `deb/`, `rpm/`, `appimage/`
 
+**macOS architectures** — `npm run tauri build` targets your Mac's own architecture
+(Apple Silicon → `arm64`, Intel → `x86_64`; check with `uname -m`). To build a specific
+one or cross-compile:
+
+```bash
+# Apple Silicon (arm64)
+rustup target add aarch64-apple-darwin
+npm run tauri build -- --target aarch64-apple-darwin
+
+# Intel (x86_64)
+rustup target add x86_64-apple-darwin
+npm run tauri build -- --target x86_64-apple-darwin
+
+# Universal — one app that runs on both Apple Silicon and Intel
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+npm run tauri build -- --target universal-apple-darwin
+```
+
 App id (`com.anttree.opensheet`), window size and bundle settings live in
 [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json). Icons are in `src-tauri/icons/` —
 regenerate them from a source PNG with `npm run tauri icon <path/to/icon.png>`.

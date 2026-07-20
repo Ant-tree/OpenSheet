@@ -144,6 +144,24 @@ npm run tauri build    # 네이티브 앱 + 설치파일 생성
 - **Windows** — `msi/`, `nsis/` 설치파일
 - **Linux** — `deb/`, `rpm/`, `appimage/`
 
+**macOS 아키텍처** — `npm run tauri build`는 현재 맥의 아키텍처로 빌드합니다
+(Apple Silicon → `arm64`, 인텔 → `x86_64`; `uname -m`으로 확인). 특정 아키텍처로
+빌드하거나 크로스 컴파일하려면:
+
+```bash
+# Apple Silicon (arm64)
+rustup target add aarch64-apple-darwin
+npm run tauri build -- --target aarch64-apple-darwin
+
+# 인텔 (x86_64)
+rustup target add x86_64-apple-darwin
+npm run tauri build -- --target x86_64-apple-darwin
+
+# 유니버설 — Apple Silicon·인텔 양쪽에서 실행되는 단일 앱
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+npm run tauri build -- --target universal-apple-darwin
+```
+
 앱 ID(`com.anttree.opensheet`)·창 크기·번들 설정은
 [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json) 에 있습니다. 아이콘은
 `src-tauri/icons/` 에 있고, 소스 PNG로부터 `npm run tauri icon <경로>` 로 다시 만들 수 있습니다.
