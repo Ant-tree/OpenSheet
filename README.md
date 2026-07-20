@@ -1,12 +1,14 @@
 # OpenSheet
 
+**한국어 문서: [README.ko.md](README.ko.md)**
+
 A web-based spreadsheet editor that behaves like Microsoft Excel.
 Open, edit, and save `.xlsx` and `.csv` files — with styles preserved.
 
 It runs entirely in the browser (files never leave your machine) and can also be
 deployed as a static site.
 
-**한국어 문서: [README.ko.md](README.ko.md)**
+![main](pics/main.png)
 
 ## Getting started
 

@@ -1,11 +1,13 @@
 # OpenSheet
 
+**English docs: [README.md](README.md)**
+
 마이크로소프트 엑셀과 유사하게 동작하는 웹 기반 스프레드시트 편집기입니다.
 `.xlsx`와 `.csv` 파일을 열고, 편집하고, **서식을 유지한 채** 다시 저장할 수 있습니다.
 
 브라우저에서 완전히 로컬로 동작하며(파일은 서버로 전송되지 않습니다), 원하면 정적 호스팅으로 웹 배포도 가능합니다.
 
-**English docs: [README.md](README.md)**
+![main](pics/main.png)
 
 ## 실행 방법
 
