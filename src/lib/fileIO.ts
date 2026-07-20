@@ -4,6 +4,7 @@ import type {
   BorderSide,
   CellBorders,
   CellFormat,
+  ChartSpec,
   CondFormatRule,
   DataValidation,
   HAlign,
@@ -13,6 +14,10 @@ import type {
 import { t, useLangStore } from '../i18n'
 import { strongerBorder } from './format'
 import { opFromExcel, opToExcel } from './condFormat'
+import { chartToSvgString, svgToPngDataUrl } from './chartRender'
+
+/** sheet id -> charts inserted on it. */
+export type ChartsBySheet = Record<number, ChartSpec[]>
 
 export interface ImportedSheet {
   name: string
@@ -467,8 +472,9 @@ export async function exportWorkbook(
   sheets: SheetMeta[],
   fileName: string,
   format: 'xlsx' | 'csv',
+  charts?: ChartsBySheet,
 ): Promise<void> {
-  const buf = await workbookBuffer(hf, sheets, format)
+  const buf = await workbookBuffer(hf, sheets, format, charts)
   const base = fileName.replace(/\.(xlsx|csv)$/i, '')
   const type =
     format === 'csv'
@@ -482,10 +488,46 @@ export async function workbookBuffer(
   hf: HyperFormula,
   sheets: SheetMeta[],
   format: 'xlsx' | 'csv',
+  charts?: ChartsBySheet,
 ): Promise<ArrayBuffer> {
   const wb = buildWorkbook(hf, sheets, format)
+  if (format === 'xlsx' && charts) await embedCharts(wb, hf, sheets, charts)
   const buf = format === 'csv' ? await wb.csv.writeBuffer() : await wb.xlsx.writeBuffer()
   return buf as ArrayBuffer
+}
+
+/**
+ * Rasterize each inserted chart to a PNG and place it on its worksheet, to the
+ * right of the used data range (stacked). CSV has no image support, so charts
+ * are only embedded for xlsx.
+ */
+async function embedCharts(
+  wb: ExcelJS.Workbook,
+  hf: HyperFormula,
+  sheets: SheetMeta[],
+  charts: ChartsBySheet,
+): Promise<void> {
+  const ROW_PX = 20
+  for (let i = 0; i < sheets.length; i++) {
+    const meta = sheets[i]
+    const list = charts[meta.id]
+    if (!list?.length) continue
+    const ws = wb.getWorksheet(i + 1)
+    if (!ws) continue
+    const dims = hf.getSheetDimensions(meta.id)
+    const anchorCol = Math.max(1, dims.width) + 1 // one column right of the data
+    let rowCursor = 0
+    for (const c of list) {
+      const svg = chartToSvgString(c.data, c.kind, c.width, c.height)
+      const dataUrl = await svgToPngDataUrl(svg, c.width, c.height)
+      const imageId = wb.addImage({ base64: dataUrl.split(',')[1], extension: 'png' })
+      ws.addImage(imageId, {
+        tl: { col: anchorCol, row: rowCursor } as ExcelJS.Anchor,
+        ext: { width: c.width, height: c.height },
+      })
+      rowCursor += Math.ceil(c.height / ROW_PX) + 1
+    }
+  }
 }
 
 /** True when the browser supports the File System Access API (Chrome/Edge). */
@@ -538,9 +580,10 @@ export async function saveToHandle(
   hf: HyperFormula,
   sheets: SheetMeta[],
   handle: FileSystemFileHandle,
+  charts?: ChartsBySheet,
 ): Promise<void> {
   const format: 'xlsx' | 'csv' = handle.name.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx'
-  const buf = await workbookBuffer(hf, sheets, format)
+  const buf = await workbookBuffer(hf, sheets, format, charts)
   const writable = await handle.createWritable()
   await writable.write(buf)
   await writable.close()
@@ -557,6 +600,7 @@ export async function saveWorkbookAs(
   sheets: SheetMeta[],
   fileName: string,
   format: 'xlsx' | 'csv',
+  charts?: ChartsBySheet,
 ): Promise<FileSystemFileHandle | null | undefined> {
   const base = fileName.replace(/\.(xlsx|csv)$/i, '')
   const suggested = `${base}.${format}`
@@ -585,11 +629,11 @@ export async function saveWorkbookAs(
       if ((err as Error).name === 'AbortError') return undefined
       throw err
     }
-    await saveToHandle(hf, sheets, handle)
+    await saveToHandle(hf, sheets, handle, charts)
     return handle
   }
   // No File System Access API: download a copy.
-  await exportWorkbook(hf, sheets, suggested, format)
+  await exportWorkbook(hf, sheets, suggested, format, charts)
   return null
 }
 

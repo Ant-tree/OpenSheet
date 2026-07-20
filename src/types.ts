@@ -70,6 +70,29 @@ export interface Selection {
   focus: CellRef
 }
 
+export type ChartKind = 'bar' | 'line' | 'pie'
+
+/** Data extracted from a range to draw a chart. */
+export interface ChartData {
+  categories: string[]
+  series: { name: string; values: number[] }[]
+}
+
+/**
+ * A chart inserted onto a sheet. Position/size are in CSS pixels within the
+ * grid area; `data` is captured at insert time so the chart is stable even if
+ * the underlying cells change. Exported to `.xlsx` as an embedded image.
+ */
+export interface ChartSpec {
+  id: string
+  kind: ChartKind
+  x: number
+  y: number
+  width: number
+  height: number
+  data: ChartData
+}
+
 export interface SheetMeta {
   id: number
   name: string

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Toolbar from './components/Toolbar'
 import FormulaBar from './components/FormulaBar'
 import Grid from './components/Grid'
+import ChartLayer from './components/ChartLayer'
 import SheetTabs from './components/SheetTabs'
 import FindReplace from './components/FindReplace'
 import CondFormatPanel from './components/CondFormatPanel'
@@ -59,9 +60,9 @@ export default function App() {
         const onErr = (err: Error) =>
           alert(translate('saveFail', useLangStore.getState().lang) + err.message)
         if (store.fileHandle) {
-          saveToHandle(store.hf, store.sheets, store.fileHandle).catch(onErr)
+          saveToHandle(store.hf, store.sheets, store.fileHandle, store.charts).catch(onErr)
         } else {
-          exportWorkbook(store.hf, store.sheets, store.fileName, 'xlsx').catch(onErr)
+          exportWorkbook(store.hf, store.sheets, store.fileName, 'xlsx', store.charts).catch(onErr)
         }
         return
       }
@@ -187,7 +188,10 @@ export default function App() {
       {showCond && <CondFormatPanel onClose={() => setShowCond(false)} />}
       {showChart && <ChartPanel onClose={() => setShowChart(false)} />}
       {showValidation && <DataValidationPanel onClose={() => setShowValidation(false)} />}
-      <Grid />
+      <div className="grid-area">
+        <Grid />
+        <ChartLayer />
+      </div>
       <SheetTabs />
       <div className="status-bar">
         <span>{fileName}</span>

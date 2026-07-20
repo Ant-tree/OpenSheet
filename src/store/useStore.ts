@@ -3,6 +3,7 @@ import { HyperFormula } from 'hyperformula'
 import type {
   BorderSide,
   CellFormat,
+  ChartSpec,
   CondFormatRule,
   DataValidation,
   MergeRange,
@@ -39,6 +40,7 @@ export interface SerializedDoc {
     rowHeights: Record<number, number>
     frozenRows: number
     frozenCols: number
+    charts?: ChartSpec[]
   }[]
 }
 
@@ -73,6 +75,8 @@ interface StoreState {
   fileName: string
   /** Writable handle to the opened file (File System Access API), when available. */
   fileHandle: FileSystemFileHandle | null
+  /** Inserted charts, keyed by sheet id. Kept out of undo history. */
+  charts: Record<number, ChartSpec[]>
   /** Bumped on every mutation to trigger re-renders. */
   rev: number
   /** Undo/redo history of editable-state snapshots. */
@@ -157,6 +161,13 @@ interface StoreState {
   renameSheet: (id: number, name: string) => void
   setActiveSheet: (id: number) => void
 
+  /** Insert a chart onto the active sheet. */
+  addChart: (spec: Omit<ChartSpec, 'id'>) => void
+  /** Move an inserted chart on the active sheet. */
+  moveChart: (id: string, x: number, y: number) => void
+  /** Remove an inserted chart from the active sheet. */
+  removeChart: (id: string) => void
+
   /** Reset to a blank single-sheet workbook (New file). */
   newWorkbook: () => void
 
@@ -207,6 +218,7 @@ export const useStore = create<StoreState>((set, get) => {
     columnFilters: {},
     fileName: t('defaultFileName', detectLang()),
     fileHandle: null,
+    charts: {},
     rev: 0,
     past: [],
     future: [],
@@ -604,7 +616,7 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     serializeState() {
-      const { hf, sheets, fileName } = get()
+      const { hf, sheets, fileName, charts } = get()
       return {
         fileName,
         sheets: sheets.map((m) => ({
@@ -619,6 +631,7 @@ export const useStore = create<StoreState>((set, get) => {
           rowHeights: m.rowHeights,
           frozenRows: m.frozenRows,
           frozenCols: m.frozenCols,
+          charts: charts[m.id] ?? [],
         })),
       }
     },
@@ -641,6 +654,10 @@ export const useStore = create<StoreState>((set, get) => {
         frozenRows: s.frozenRows ?? 0,
         frozenCols: s.frozenCols ?? 0,
       }))
+      const chartsBySheet: Record<number, ChartSpec[]> = {}
+      data.sheets.forEach((s, i) => {
+        if (s.charts?.length) chartsBySheet[metas[i].id] = s.charts
+      })
       set({
         hf,
         sheets: metas,
@@ -649,6 +666,7 @@ export const useStore = create<StoreState>((set, get) => {
         editing: null,
         fileName: data.fileName,
         fileHandle: null,
+        charts: chartsBySheet,
         filterHeaderRow: null,
         filterCols: [],
         columnFilters: {},
@@ -717,6 +735,32 @@ export const useStore = create<StoreState>((set, get) => {
       })
     },
 
+    addChart(spec) {
+      const { activeSheetId, charts } = get()
+      const id = `chart-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+      const list = charts[activeSheetId] ?? []
+      set({ charts: { ...charts, [activeSheetId]: [...list, { ...spec, id }] } })
+      bump(set)
+    },
+
+    moveChart(id, x, y) {
+      const { activeSheetId, charts } = get()
+      const list = charts[activeSheetId] ?? []
+      set({
+        charts: {
+          ...charts,
+          [activeSheetId]: list.map((c) => (c.id === id ? { ...c, x, y } : c)),
+        },
+      })
+    },
+
+    removeChart(id) {
+      const { activeSheetId, charts } = get()
+      const list = charts[activeSheetId] ?? []
+      set({ charts: { ...charts, [activeSheetId]: list.filter((c) => c.id !== id) } })
+      bump(set)
+    },
+
     newWorkbook() {
       const next = buildInitial()
       set({
@@ -727,6 +771,7 @@ export const useStore = create<StoreState>((set, get) => {
         editing: null,
         fileName: t('defaultFileName', detectLang()),
         fileHandle: null,
+        charts: {},
         filterHeaderRow: null,
         filterCols: [],
         columnFilters: {},
@@ -764,6 +809,7 @@ export const useStore = create<StoreState>((set, get) => {
         editing: null,
         fileName,
         fileHandle: null,
+        charts: {},
         filterHeaderRow: null,
         filterCols: [],
         columnFilters: {},

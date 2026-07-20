@@ -48,7 +48,7 @@ npm run preview  # preview the production build
 | **Clipboard** | Copy · cut · paste over a range as TSV — formats are kept when pasting within the app, and it interoperates with Excel/Sheets |
 | **Sorting** | Sort a selected range by its key column — relative formula references are automatically re-based by how far each row moved |
 | **AutoFilter** | Turn a selection into a filter (header row gets dropdowns); pick values per column to show/hide matching rows |
-| **Charts** | Turn a selected range into a bar / line / pie chart (labels from the first column, series from the header row) |
+| **Charts** | Turn a selected range into a bar / line / pie chart (labels from the first column, series from the header row); **insert** it onto the sheet as a draggable card and it is embedded into the saved `.xlsx` as an image |
 | **Multiple sheets** | Add / delete / rename sheet tabs, with cross-sheet references |
 | **File I/O** | **New** blank workbook, open and save `.xlsx` / `.csv`; **Save As** to a new name/location; **Save in place** overwrites the opened file (Chromium browsers) or downloads a copy |
 | **Recent files** | Quickly reopen recent files (stored locally in the browser; works on desktop and mobile) |
@@ -123,6 +123,10 @@ changing web code, run `npm run cap:sync` (or the `cap:*` scripts, which sync fo
 >   CLI may warn about an older system JDK — opening the project in Android Studio resolves it).
 > - **Save in place** (File System Access API) is desktop-Chromium only. On mobile, opening
 >   uses the system file picker and saving downloads a copy.
+> - **Print / PDF** works in mobile browsers (and the PWA). Inside a Capacitor
+>   native app the wrapped web view doesn't support `window.print()`; install a
+>   Capacitor Printer plugin and the app will use it automatically (see
+>   `src/lib/print.ts`).
 
 ## Desktop app (macOS / Windows / Linux)
 

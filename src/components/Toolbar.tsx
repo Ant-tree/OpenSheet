@@ -214,19 +214,19 @@ export default function Toolbar({
   }
 
   const saveInPlace = async () => {
-    const { hf, sheets, fileHandle } = useStore.getState()
+    const { hf, sheets, fileHandle, charts } = useStore.getState()
     if (!fileHandle) return
     try {
-      await saveToHandle(hf, sheets, fileHandle)
+      await saveToHandle(hf, sheets, fileHandle, charts)
     } catch (err) {
       alert(t('saveFail') + (err as Error).message)
     }
   }
 
   const save = async (format: 'xlsx' | 'csv') => {
-    const { hf, sheets, fileName } = useStore.getState()
+    const { hf, sheets, fileName, charts } = useStore.getState()
     try {
-      await exportWorkbook(hf, sheets, fileName, format)
+      await exportWorkbook(hf, sheets, fileName, format, charts)
     } catch (err) {
       alert(t('saveFail') + (err as Error).message)
     }
@@ -235,9 +235,9 @@ export default function Toolbar({
   // Save As: pick a new name/location. On Chromium the new handle becomes the
   // in-place target (so later ⌘S saves there); elsewhere it downloads a copy.
   const saveAs = async () => {
-    const { hf, sheets, fileName } = useStore.getState()
+    const { hf, sheets, fileName, charts } = useStore.getState()
     try {
-      const handle = await saveWorkbookAs(hf, sheets, fileName, 'xlsx')
+      const handle = await saveWorkbookAs(hf, sheets, fileName, 'xlsx', charts)
       if (handle === undefined) return // user cancelled
       if (handle) {
         useStore.setState({ fileName: handle.name, fileHandle: handle })

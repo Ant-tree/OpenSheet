@@ -1,68 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store/useStore'
-import { selectionBounds } from '../lib/utils'
+import { computeChartData, CHART_COLORS as COLORS } from '../lib/chartRender'
+import type { ChartData } from '../types'
 import { useT } from '../i18n'
 import Icon from './Icon'
 
 type ChartType = 'bar' | 'line' | 'pie'
-
-const COLORS = ['#1a73e8', '#34a853', '#fbbc04', '#ea4335', '#a142f4', '#00acc1', '#ff7043', '#9e9d24']
-
-interface ChartData {
-  categories: string[]
-  series: { name: string; values: number[] }[]
-}
-
-const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v)
-
-/**
- * Interpret the current selection as chart data. The leftmost column is used as
- * category labels when it holds text; the top row as series names when it holds
- * text. Everything else is read as numeric series (non-numbers count as 0).
- */
-function buildChartData(): ChartData | null {
-  const s = useStore.getState()
-  const b = selectionBounds(s.selection)
-  const val = (r: number, c: number) => s.getComputed(r, c)
-
-  const rows: number[] = []
-  for (let r = b.top; r <= b.bottom; r++) rows.push(r)
-  const cols: number[] = []
-  for (let c = b.left; c <= b.right; c++) cols.push(c)
-
-  const leftHasText = cols.length > 1 && rows.some((r) => {
-    const v = val(r, b.left)
-    return v != null && v !== '' && !isNum(v)
-  })
-  const labelCol = leftHasText ? b.left : null
-  const seriesCols = cols.filter((c) => c !== labelCol)
-
-  const topHasNumber = seriesCols.some((c) => isNum(val(b.top, c)))
-  const hasHeaderRow = rows.length > 1 && !topHasNumber
-  const dataRows = rows.filter((r) => !(hasHeaderRow && r === b.top))
-
-  if (!seriesCols.length || !dataRows.length) return null
-  const anyNumber = dataRows.some((r) => seriesCols.some((c) => isNum(val(r, c))))
-  if (!anyNumber) return null
-
-  const categories = dataRows.map((r, i) => {
-    if (labelCol != null) {
-      const v = val(r, labelCol)
-      return v == null || v === '' ? String(i + 1) : String(v)
-    }
-    return String(i + 1)
-  })
-
-  const series = seriesCols.map((c, si) => ({
-    name: hasHeaderRow ? String(val(b.top, c) ?? `Series ${si + 1}`) : `Series ${si + 1}`,
-    values: dataRows.map((r) => {
-      const v = val(r, c)
-      return isNum(v) ? v : 0
-    }),
-  }))
-
-  return { categories, series }
-}
 
 const W = 540
 const H = 340
@@ -195,8 +138,24 @@ function PieChart({ data }: { data: ChartData }) {
 export default function ChartPanel({ onClose }: { onClose: () => void }) {
   const t = useT()
   const [type, setType] = useState<ChartType>('bar')
+  const addChart = useStore((s) => s.addChart)
   // Capture the data once when the panel opens (selection at open time).
-  const data = useMemo(() => buildChartData(), [])
+  const data = useMemo(() => computeChartData(), [])
+
+  const insert = () => {
+    if (!data) return
+    const existing = Object.values(useStore.getState().charts).flat().length
+    const offset = (existing % 6) * 24
+    addChart({
+      kind: type,
+      x: 40 + offset,
+      y: 40 + offset,
+      width: 440,
+      height: 300,
+      data,
+    })
+    onClose()
+  }
 
   const legendItems =
     data && type === 'pie'
@@ -220,9 +179,14 @@ export default function ChartPanel({ onClose }: { onClose: () => void }) {
               </button>
             ))}
           </div>
-          <button className="tbtn" title={t('close')} onClick={onClose}>
-            <Icon name="close" />
-          </button>
+          <div className="chart-actions">
+            <button className="tbtn primary" onClick={insert} disabled={!data}>
+              {t('chartInsert')}
+            </button>
+            <button className="tbtn" title={t('close')} onClick={onClose}>
+              <Icon name="close" />
+            </button>
+          </div>
         </div>
         {data ? (
           <>
