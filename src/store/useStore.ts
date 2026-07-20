@@ -52,8 +52,9 @@ interface Snapshot {
 /** Copied block, kept in-module so pasting can restore formats too. */
 let clipboard: { rows: string[][]; formats: (CellFormat | undefined)[][] } | null = null
 
-export const MAX_ROWS = 200
-export const MAX_COLS = 52 // A .. AZ
+// The grid virtualizes rows, so a large row cap costs nothing until scrolled to.
+export const MAX_ROWS = 5000
+export const MAX_COLS = 78 // A .. BZ
 export const DEFAULT_COL_WIDTH = 96
 export const DEFAULT_ROW_HEIGHT = 24
 export const HEADER_WIDTH = 48

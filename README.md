@@ -160,7 +160,7 @@ src/
 
 ## Known limitations
 
-- The grid displays up to 200 rows × 52 columns (A–AZ). Adjust `MAX_ROWS` / `MAX_COLS` in `store/useStore.ts` if needed.
+- The grid provides 5000 rows × 78 columns (A–BZ), rendered with row virtualization so only the visible slice is in the DOM. Adjust `MAX_ROWS` / `MAX_COLS` in `store/useStore.ts` if needed.
 - **Save in place** uses the File System Access API and works in Chromium browsers (Chrome/Edge); elsewhere saving downloads a copy.
 - The legacy `.xls` format is not supported — re-save as `.xlsx` first.
 - Theme/indexed colors are resolved with the default Office palette, so custom-themed workbooks may differ slightly.

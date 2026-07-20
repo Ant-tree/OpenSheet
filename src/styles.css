@@ -916,3 +916,10 @@ table.grid {
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+/* Virtualization spacer rows (fill scroll height for off-screen rows) */
+.grid tr.v-spacer td {
+  padding: 0;
+  border: none;
+  background: transparent;
+}

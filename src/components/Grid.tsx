@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   useStore,
   MAX_ROWS,
@@ -102,6 +103,46 @@ export default function Grid() {
     return undefined
   }, [sheet.dataValidations, selection.focus])
   const [dvOpen, setDvOpen] = useState<{ x: number; y: number } | null>(null)
+
+  // ----- row virtualization -----
+  // Rows have a fixed height (see .grid td in styles.css), so we can window the
+  // visible slice cheaply and pad the rest with spacer rows. Filtering removes
+  // rows from `visibleRows`, so windowing works over the *visible* order.
+  const [viewport, setViewport] = useState({ top: 0, height: 600 })
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const update = () => setViewport({ top: el.scrollTop, height: el.clientHeight })
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', update)
+      ro.disconnect()
+    }
+  }, [])
+  const visibleRows = useMemo(() => {
+    const arr: number[] = []
+    for (let r = 0; r < MAX_ROWS; r++) if (!hiddenRows.has(r)) arr.push(r)
+    return arr
+  }, [hiddenRows])
+  const renderVisualIndices = useMemo(() => {
+    const RH = DEFAULT_ROW_HEIGHT
+    const overscan = 8
+    const firstI = Math.max(0, Math.floor(viewport.top / RH) - overscan)
+    const lastI = Math.min(
+      visibleRows.length - 1,
+      Math.ceil((viewport.top + viewport.height) / RH) + overscan,
+    )
+    const nFrozen = sheet.frozenRows ?? 0
+    const set = new Set<number>()
+    for (let i = 0; i < nFrozen && i < visibleRows.length; i++) set.add(i) // frozen rows always
+    for (let i = firstI; i <= lastI; i++) set.add(i)
+    const activeI = visibleRows.indexOf(selection.focus.row) // keep the active cell mounted
+    if (activeI >= 0) set.add(activeI)
+    return [...set].sort((a, b) => a - b)
+  }, [viewport, visibleRows, sheet.frozenRows, selection.focus.row])
 
   const setSelection = useStore((s) => s.setSelection)
   const setEditing = useStore((s) => s.setEditing)
@@ -524,8 +565,22 @@ export default function Grid() {
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: MAX_ROWS }, (_, r) =>
-            hiddenRows.has(r) ? null : (
+          {(() => {
+            const RH = DEFAULT_ROW_HEIGHT
+            const body: ReactNode[] = []
+            let prevI = -1
+            const spacer = (h: number, k: string) =>
+              h > 0 &&
+              body.push(
+                <tr key={k} className="v-spacer" aria-hidden="true">
+                  <td colSpan={MAX_COLS + 1} style={{ height: h, padding: 0, border: 'none' }} />
+                </tr>,
+              )
+            for (const vi of renderVisualIndices) {
+              spacer((vi - prevI - 1) * RH, `sp-${vi}`)
+              prevI = vi
+              const r = visibleRows[vi]
+              body.push(
             <tr key={r}>
               <th
                 className={`rowhead${r >= bounds.top && r <= bounds.bottom ? ' sel' : ''}`}
@@ -684,8 +739,12 @@ export default function Grid() {
                   </td>
                 )
               })}
-            </tr>
-          ))}
+            </tr>,
+              )
+            }
+            spacer((visibleRows.length - 1 - prevI) * RH, 'sp-tail')
+            return body
+          })()}
         </tbody>
       </table>
       {ctxMenu && (
