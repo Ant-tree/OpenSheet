@@ -118,6 +118,10 @@ interface StoreState {
   replaceAll: (find: string, repl: string) => number
   /** Auto-fill: extend the `src` block over `tgt` (series for numbers, else copy). */
   fillRange: (src: MergeRange, tgt: MergeRange) => void
+  /** Fill the selection's top row down over the rest of the selection (Ctrl+D). */
+  fillDown: () => void
+  /** Fill the selection's left column right over the rest of the selection (Ctrl+R). */
+  fillRight: () => void
 
   setFileHandle: (handle: FileSystemFileHandle | null) => void
 
@@ -761,6 +765,24 @@ export const useStore = create<StoreState>((set, get) => {
       }
       updateSheet(set, get, sheet.id, { formats })
       bump(set)
+    },
+
+    fillDown() {
+      const b = selectionBounds(get().selection)
+      if (b.top === b.bottom) return
+      get().fillRange(
+        { top: b.top, bottom: b.top, left: b.left, right: b.right },
+        { top: b.top, bottom: b.bottom, left: b.left, right: b.right },
+      )
+    },
+
+    fillRight() {
+      const b = selectionBounds(get().selection)
+      if (b.left === b.right) return
+      get().fillRange(
+        { top: b.top, bottom: b.bottom, left: b.left, right: b.left },
+        { top: b.top, bottom: b.bottom, left: b.left, right: b.right },
+      )
     },
 
     replaceAll(find, repl) {

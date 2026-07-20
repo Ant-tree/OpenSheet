@@ -26,18 +26,22 @@ export default function App() {
   useStore((s) => s.rev)
 
   // Aggregate numeric stats over the current selection (Excel-style status bar).
-  const { count, sum, avg } = (() => {
+  const { count, sum, avg, min, max } = (() => {
     const get = useStore.getState().getComputed
     let count = 0
     let sum = 0
+    let min = Infinity
+    let max = -Infinity
     for (const ref of iterateSelection(selection)) {
       const v = get(ref.row, ref.col)
       if (typeof v === 'number') {
         count++
         sum += v
+        if (v < min) min = v
+        if (v > max) max = v
       }
     }
-    return { count, sum, avg: count ? sum / count : 0 }
+    return { count, sum, avg: count ? sum / count : 0, min, max }
   })()
 
   // Ctrl/Cmd+B / I / U formatting shortcuts.
@@ -81,6 +85,18 @@ export default function App() {
         e.preventDefault()
         if (kl === 'y' || e.shiftKey) store.redo()
         else store.undo()
+        return
+      }
+
+      // Fill down / right over the selection (Excel Ctrl+D / Ctrl+R).
+      if (!store.editing && kl === 'd') {
+        e.preventDefault()
+        store.fillDown()
+        return
+      }
+      if (!store.editing && kl === 'r') {
+        e.preventDefault()
+        store.fillRight()
         return
       }
 
@@ -176,6 +192,12 @@ export default function App() {
             </span>
             <span>
               {t('statusAvg')}: {formatStat(avg)}
+            </span>
+            <span>
+              {t('statusMin')}: {formatStat(min)}
+            </span>
+            <span>
+              {t('statusMax')}: {formatStat(max)}
             </span>
           </>
         )}
