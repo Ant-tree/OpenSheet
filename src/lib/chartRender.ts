@@ -87,7 +87,8 @@ const esc = (s: string) =>
  */
 export function chartToSvgString(data: ChartData, kind: ChartKind, W: number, H: number): string {
   const legendH = 26
-  const PAD = { l: 48, r: 16, t: 16, b: 40 + legendH }
+  // Wide left margin so multi-digit y-axis labels (e.g. "1,800") aren't clipped.
+  const PAD = { l: 60, r: 16, t: 16, b: 40 + legendH }
   const plotW = W - PAD.l - PAD.r
   const plotH = H - PAD.t - PAD.b
   const parts: string[] = []
