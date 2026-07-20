@@ -488,12 +488,18 @@ export async function exportWorkbook(
  * Hand a generated file to the user: on a Capacitor native app write it and
  * open the share sheet (web views can't download `blob:` URLs), otherwise
  * trigger a normal browser download.
+ *
+ * On a native platform we do NOT silently fall back to a `blob:` download — it
+ * can't work there, so a failure is surfaced (the caller alerts) instead of
+ * doing nothing.
  */
 async function deliverFile(blob: Blob, filename: string): Promise<void> {
-  try {
-    if (await saveOnNative(blob, filename)) return
-  } catch {
-    // Native save failed/unavailable — fall back to a browser download.
+  const isNative = (
+    window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }
+  ).Capacitor?.isNativePlatform?.()
+  if (isNative) {
+    await saveOnNative(blob, filename)
+    return
   }
   downloadBlob(blob, filename)
 }

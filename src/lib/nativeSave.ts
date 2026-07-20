@@ -31,8 +31,20 @@ export async function saveOnNative(blob: Blob, filename: string): Promise<boolea
     import('@capacitor/share'),
   ])
   const data = await blobToBase64(blob)
-  await Filesystem.writeFile({ path: filename, data, directory: Directory.Cache })
-  const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache })
-  await Share.share({ title: filename, url: uri })
+  // writeFile returns the file's uri directly — use it for sharing (works on
+  // both iOS and Android; the Share plugin handles the Android FileProvider).
+  const { uri } = await Filesystem.writeFile({
+    path: filename,
+    data,
+    directory: Directory.Cache,
+    recursive: true,
+  })
+  try {
+    await Share.share({ title: filename, url: uri, dialogTitle: filename })
+  } catch (err) {
+    // Dismissing the share sheet rejects with "Share canceled" — not an error.
+    const msg = String((err as { message?: string })?.message ?? err)
+    if (!/cancel/i.test(msg)) throw err
+  }
   return true
 }
