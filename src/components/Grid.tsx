@@ -12,6 +12,7 @@ import { condStyleFor } from '../lib/condFormat'
 import { colToLetter, isInSelection, key, selectionBounds } from '../lib/utils'
 import type { BorderSide, CellBorders, CellFormat, MergeRange } from '../types'
 import ContextMenu from './ContextMenu'
+import { useFormulaAutocomplete } from './FormulaAutocomplete'
 
 /**
  * Compute the borders to actually paint for a rendered cell (a normal cell, or
@@ -180,6 +181,24 @@ export default function Grid() {
     })
   }
 
+  // Formula function-name autocomplete + argument hint for the cell editor.
+  const ac = useFormulaAutocomplete({
+    inputRef,
+    value: editBuffer,
+    active: !!editing,
+    apply: (next, caret) => {
+      refRange.current = null
+      setEditBuffer(next)
+      requestAnimationFrame(() => {
+        const el = inputRef.current
+        if (el) {
+          el.focus({ preventScroll: true })
+          el.setSelectionRange(caret, caret)
+        }
+      })
+    },
+  })
+
   // The active cell always hosts a focused input — even when not editing — so it
   // captures the first keystroke, including IME composition (Korean). Starting
   // an edit from a keydown on a non-editable element breaks that composition.
@@ -207,6 +226,7 @@ export default function Grid() {
 
   const onEditorKeyDown = (e: React.KeyboardEvent) => {
     if (composingRef.current || e.nativeEvent.isComposing) return // don't disturb IME
+    if (ac.onKeyDown(e)) return // autocomplete popup consumed the key
     const isEditing = !!useStore.getState().editing
     const k = e.key
     if (isEditing) {
@@ -591,6 +611,7 @@ export default function Grid() {
                           value={isEditing ? editBuffer : ''}
                           onChange={onEditorChange}
                           onKeyDown={onEditorKeyDown}
+                          onSelect={ac.reposition}
                           onCompositionStart={onCompositionStart}
                           onCompositionEnd={onCompositionEnd}
                           onBlur={() => commitEdit('none')}
@@ -613,6 +634,7 @@ export default function Grid() {
       {ctxMenu && (
         <ContextMenu x={ctxMenu.x} y={ctxMenu.y} onClose={() => setCtxMenu(null)} />
       )}
+      {ac.node}
     </div>
   )
 }
