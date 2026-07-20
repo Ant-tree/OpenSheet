@@ -146,6 +146,49 @@ export default function Grid() {
     return [...set].sort((a, b) => a - b)
   }, [viewport, visibleRows, sheet.frozenRows, selection.focus.row])
 
+  // Per-cell content (value text, number flag, and content-derived style: format,
+  // conditional formatting, borders). This depends only on the document, never on
+  // the selection, so we memoize it per `rev` — selection-only re-renders (e.g. a
+  // drag) then reuse the cache instead of recomputing every visible cell.
+  const contentCache = useRef(new Map<string, { text: string; isNum: boolean; contentStyle: React.CSSProperties }>())
+  const contentRev = useRef(-1)
+  if (contentRev.current !== rev) {
+    contentRev.current = rev
+    contentCache.current.clear()
+  }
+  const cellContent = (r: number, c: number, k: string, merge: MergeRange | undefined) => {
+    const cached = contentCache.current.get(k)
+    if (cached) return cached
+    const fmt = sheet.formats[k]
+    const computed = useStore.getState().getComputed(r, c)
+    const text = displayValue(computed, fmt)
+    const isNum = typeof computed === 'number'
+    const contentStyle: React.CSSProperties = {}
+    if (fmt) {
+      if (fmt.bold) contentStyle.fontWeight = 700
+      if (fmt.italic) contentStyle.fontStyle = 'italic'
+      if (fmt.underline) contentStyle.textDecoration = 'underline'
+      if (fmt.color) contentStyle.color = fmt.color
+      if (fmt.bgColor) contentStyle.background = fmt.bgColor
+      if (fmt.align) contentStyle.textAlign = fmt.align
+      if (fmt.valign) contentStyle.verticalAlign = fmt.valign
+      if (fmt.wrap) contentStyle.whiteSpace = 'normal'
+    }
+    if (sheet.condFormats.length) {
+      const cf = condStyleFor(sheet.condFormats, r, c, computed)
+      if (cf.bgColor) contentStyle.background = cf.bgColor
+      if (cf.color) contentStyle.color = cf.color
+    }
+    const bd = resolveBorders(sheet.formats, merge, r, c)
+    if (bd.top) contentStyle.borderTop = borderCss(bd.top)
+    if (bd.left) contentStyle.borderLeft = borderCss(bd.left)
+    if (bd.bottom) contentStyle.borderBottom = borderCss(bd.bottom)
+    if (bd.right) contentStyle.borderRight = borderCss(bd.right)
+    const res = { text, isNum, contentStyle }
+    contentCache.current.set(k, res)
+    return res
+  }
+
   const setSelection = useStore((s) => s.setSelection)
   const setEditing = useStore((s) => s.setEditing)
   const moveSelection = useStore((s) => s.moveSelection)
@@ -642,33 +685,10 @@ export default function Grid() {
                 const note = sheet.notes[k]
                 const isFilterHeader = filterHeaderRow === r && filterCols.includes(c)
                 const hasColFilter = !!columnFilters[c]
-                const computed = useStore.getState().getComputed(r, c)
-                const text = displayValue(computed, fmt)
-                const isNum = typeof computed === 'number'
-
-                const style: React.CSSProperties = {}
-                if (fmt) {
-                  if (fmt.bold) style.fontWeight = 700
-                  if (fmt.italic) style.fontStyle = 'italic'
-                  if (fmt.underline) style.textDecoration = 'underline'
-                  if (fmt.color) style.color = fmt.color
-                  if (fmt.bgColor) style.background = fmt.bgColor
-                  if (fmt.align) style.textAlign = fmt.align
-                  if (fmt.valign) style.verticalAlign = fmt.valign
-                  if (fmt.wrap) style.whiteSpace = 'normal'
-                }
-                if (sheet.condFormats.length) {
-                  const cf = condStyleFor(sheet.condFormats, r, c, computed)
-                  if (cf.bgColor) style.background = cf.bgColor
-                  if (cf.color) style.color = cf.color
-                }
-                {
-                  const bd = resolveBorders(sheet.formats, merge, r, c)
-                  if (bd.top) style.borderTop = borderCss(bd.top)
-                  if (bd.left) style.borderLeft = borderCss(bd.left)
-                  if (bd.bottom) style.borderBottom = borderCss(bd.bottom)
-                  if (bd.right) style.borderRight = borderCss(bd.right)
-                }
+                const content = cellContent(r, c, k, merge)
+                const text = content.text
+                const isNum = content.isNum
+                const style: React.CSSProperties = { ...content.contentStyle }
                 if (isFillCorner || note || isFilterHeader) style.position = 'relative'
                 const frozenR = r < frozenRows
                 const frozenC = c < frozenCols
