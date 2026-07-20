@@ -139,8 +139,10 @@ export default function Grid() {
     const set = new Set<number>()
     for (let i = 0; i < nFrozen && i < visibleRows.length; i++) set.add(i) // frozen rows always
     for (let i = firstI; i <= lastI; i++) set.add(i)
-    const activeI = visibleRows.indexOf(selection.focus.row) // keep the active cell mounted
-    if (activeI >= 0) set.add(activeI)
+    // keep the active cell mounted (no filter → visual index == row index)
+    const activeI =
+      hiddenRows.size === 0 ? selection.focus.row : visibleRows.indexOf(selection.focus.row)
+    if (activeI >= 0 && activeI < visibleRows.length) set.add(activeI)
     return [...set].sort((a, b) => a - b)
   }, [viewport, visibleRows, sheet.frozenRows, selection.focus.row])
 
@@ -166,6 +168,23 @@ export default function Grid() {
   const filling = useRef(false)
   const fillSource = useRef<MergeRange | null>(null)
   const fillTargetRef = useRef<MergeRange | null>(null)
+  // Coalesce drag updates to one per animation frame so fast pointer moves don't
+  // trigger a grid re-render per crossed cell.
+  const dragRaf = useRef<number | null>(null)
+  const dragPending = useRef<(() => void) | null>(null)
+  const scheduleDrag = useCallback((fn: () => void) => {
+    dragPending.current = fn
+    if (dragRaf.current != null) return
+    dragRaf.current = requestAnimationFrame(() => {
+      dragRaf.current = null
+      const f = dragPending.current
+      dragPending.current = null
+      f?.()
+    })
+  }, [])
+  useEffect(() => () => {
+    if (dragRaf.current != null) cancelAnimationFrame(dragRaf.current)
+  }, [])
 
   // Build lookup of merge coverage for the active sheet.
   const { covered, anchorOf } = useMemo(() => {
@@ -388,7 +407,7 @@ export default function Grid() {
           ? { top: Math.min(src.top, row), bottom: Math.max(src.bottom, row), left: src.left, right: src.right }
           : { top: src.top, bottom: src.bottom, left: Math.min(src.left, col), right: Math.max(src.right, col) }
       fillTargetRef.current = tgt
-      setFillTarget(tgt)
+      scheduleDrag(() => setFillTarget(tgt))
       return
     }
     if (pointAnchor.current) {
@@ -396,7 +415,9 @@ export default function Grid() {
       return
     }
     if (dragging.current) {
-      setSelection({ anchor: useStore.getState().selection.anchor, focus: { row, col } })
+      scheduleDrag(() =>
+        setSelection({ anchor: useStore.getState().selection.anchor, focus: { row, col } }),
+      )
     }
   }
   useEffect(() => {
