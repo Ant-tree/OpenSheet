@@ -157,6 +157,9 @@ interface StoreState {
   renameSheet: (id: number, name: string) => void
   setActiveSheet: (id: number) => void
 
+  /** Reset to a blank single-sheet workbook (New file). */
+  newWorkbook: () => void
+
   loadWorkbook: (
     sheets: {
       name: string
@@ -711,6 +714,25 @@ export const useStore = create<StoreState>((set, get) => {
         filterHeaderRow: null,
         filterCols: [],
         columnFilters: {},
+      })
+    },
+
+    newWorkbook() {
+      const next = buildInitial()
+      set({
+        hf: next.hf,
+        sheets: next.sheets,
+        activeSheetId: next.activeSheetId,
+        selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
+        editing: null,
+        fileName: t('defaultFileName', detectLang()),
+        fileHandle: null,
+        filterHeaderRow: null,
+        filterCols: [],
+        columnFilters: {},
+        rev: get().rev + 1,
+        past: [],
+        future: [],
       })
     },
 

@@ -18,6 +18,8 @@ export function detectLang(): Lang {
 const dict = {
   en: {
     open: 'Open',
+    newFile: 'New',
+    newFileConfirm: 'Discard the current workbook and start a new one?',
     recent: 'Recent',
     noRecent: 'No recent files',
     clearRecent: 'Clear recent',
@@ -26,6 +28,7 @@ const dict = {
     saveInPlaceHint: 'Open a file first',
     saveXlsx: 'Save as xlsx…',
     saveCsv: 'Save as csv…',
+    saveAs: 'Save As…',
     printPdf: 'Print / PDF…',
     bold: 'Bold (Ctrl+B)',
     italic: 'Italic (Ctrl+I)',
@@ -142,6 +145,8 @@ const dict = {
   },
   ko: {
     open: '열기',
+    newFile: '새 파일',
+    newFileConfirm: '현재 통합 문서를 버리고 새로 시작할까요?',
     recent: '최근 파일',
     noRecent: '최근 파일 없음',
     clearRecent: '최근 목록 지우기',
@@ -150,6 +155,7 @@ const dict = {
     saveInPlaceHint: '먼저 파일을 열어 주세요',
     saveXlsx: 'xlsx로 저장…',
     saveCsv: 'csv로 저장…',
+    saveAs: '다른 이름으로 저장…',
     printPdf: '인쇄 / PDF…',
     bold: '굵게 (Ctrl+B)',
     italic: '기울임 (Ctrl+I)',

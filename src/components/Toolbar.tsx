@@ -7,8 +7,10 @@ import {
   exportWorkbook,
   pickAndReadWorkbook,
   saveToHandle,
+  saveWorkbookAs,
   supportsFileSystemAccess,
 } from '../lib/fileIO'
+import { printPage } from '../lib/print'
 import {
   NUMBER_FORMAT_PRESETS,
   asCurrency,
@@ -152,6 +154,7 @@ export default function Toolbar({
   const applyBorders = useStore((s) => s.applyBorders)
   const setFreeze = useStore((s) => s.setFreeze)
   const loadWorkbook = useStore((s) => s.loadWorkbook)
+  const newWorkbook = useStore((s) => s.newWorkbook)
   const setFileHandle = useStore((s) => s.setFileHandle)
   const getFormat = useStore((s) => s.getFormat)
   const selection = useStore((s) => s.selection)
@@ -229,9 +232,32 @@ export default function Toolbar({
     }
   }
 
+  // Save As: pick a new name/location. On Chromium the new handle becomes the
+  // in-place target (so later ⌘S saves there); elsewhere it downloads a copy.
+  const saveAs = async () => {
+    const { hf, sheets, fileName } = useStore.getState()
+    try {
+      const handle = await saveWorkbookAs(hf, sheets, fileName, 'xlsx')
+      if (handle === undefined) return // user cancelled
+      if (handle) {
+        useStore.setState({ fileName: handle.name, fileHandle: handle })
+      }
+    } catch (err) {
+      alert(t('saveFail') + (err as Error).message)
+    }
+  }
+
+  const newFile = () => {
+    if (confirm(t('newFileConfirm'))) newWorkbook()
+  }
+
   return (
     <div className="toolbar">
       <div className="group">
+        <button className="tbtn" title={t('newFile')} onClick={newFile}>
+          <Icon name="new" />
+          {t('newFile')}
+        </button>
         <button className="tbtn primary" onClick={openFile}>
           <Icon name="open" />
           {t('open')}
@@ -270,6 +296,9 @@ export default function Toolbar({
               <span className="menu-hint">⌘S</span>
             </button>
           )}
+          <button className="menu-item" onClick={saveAs}>
+            {t('saveAs')}
+          </button>
           <button className="menu-item" onClick={() => save('xlsx')}>
             {t('saveXlsx')}
           </button>
@@ -277,7 +306,7 @@ export default function Toolbar({
             {t('saveCsv')}
           </button>
           <div className="menu-sep" />
-          <button className="menu-item" onClick={() => window.print()}>
+          <button className="menu-item" onClick={printPage}>
             <span className="menu-label">
               <Icon name="print" />
               {t('printPdf')}

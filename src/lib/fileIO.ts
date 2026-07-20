@@ -546,6 +546,53 @@ export async function saveToHandle(
   await writable.close()
 }
 
+/**
+ * Save As: prompt for a new filename/location. On Chromium (File System Access)
+ * this returns the new writable handle so the app can keep saving in place;
+ * elsewhere it downloads a copy and returns null. Returns undefined if the user
+ * cancels the picker.
+ */
+export async function saveWorkbookAs(
+  hf: HyperFormula,
+  sheets: SheetMeta[],
+  fileName: string,
+  format: 'xlsx' | 'csv',
+): Promise<FileSystemFileHandle | null | undefined> {
+  const base = fileName.replace(/\.(xlsx|csv)$/i, '')
+  const suggested = `${base}.${format}`
+  const picker = (
+    window as unknown as {
+      showSaveFilePicker?: (opts: unknown) => Promise<FileSystemFileHandle>
+    }
+  ).showSaveFilePicker
+  if (typeof picker === 'function') {
+    let handle: FileSystemFileHandle
+    try {
+      handle = await picker({
+        suggestedName: suggested,
+        types: [
+          format === 'csv'
+            ? { description: 'CSV', accept: { 'text/csv': ['.csv'] } }
+            : {
+                description: 'Excel Workbook',
+                accept: {
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+                },
+              },
+        ],
+      })
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return undefined
+      throw err
+    }
+    await saveToHandle(hf, sheets, handle)
+    return handle
+  }
+  // No File System Access API: download a copy.
+  await exportWorkbook(hf, sheets, suggested, format)
+  return null
+}
+
 /** Build an exceljs workbook from HyperFormula state + formats (no download). */
 export function buildWorkbook(
   hf: HyperFormula,

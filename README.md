@@ -50,7 +50,7 @@ npm run preview  # preview the production build
 | **AutoFilter** | Turn a selection into a filter (header row gets dropdowns); pick values per column to show/hide matching rows |
 | **Charts** | Turn a selected range into a bar / line / pie chart (labels from the first column, series from the header row) |
 | **Multiple sheets** | Add / delete / rename sheet tabs, with cross-sheet references |
-| **File I/O** | Open and save `.xlsx` / `.csv`; **Save in place** overwrites the opened file (Chromium browsers) or downloads a copy |
+| **File I/O** | **New** blank workbook, open and save `.xlsx` / `.csv`; **Save As** to a new name/location; **Save in place** overwrites the opened file (Chromium browsers) or downloads a copy |
 | **Recent files** | Quickly reopen recent files (stored locally in the browser; works on desktop and mobile) |
 | **Autosave & recovery** | Your work is autosaved locally and restored when you reopen the app |
 | **Print / PDF** | Print or export to PDF from the *Save* menu (grid-only print layout) |
