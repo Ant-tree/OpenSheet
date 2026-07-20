@@ -20,19 +20,30 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 echo "✓ Node.js $(node -v)"
 
-# 2) 의존성 확인/설치 / ensure dependencies are installed and up to date
-#    매번 실행: 이미 최신이면 거의 즉시 끝나고, 새로 추가된 의존성도 자동 설치됩니다.
-#    Run every time: near-instant when already up to date, and it also pulls in
-#    any dependency added since the last run (e.g. after a git pull).
-echo "· 의존성을 확인/설치합니다 (최초 실행은 수 분 소요될 수 있음)..."
-npm install
+# 2) 의존성: 없거나 package-lock가 바뀐 경우에만 설치 (재실행은 즉시)
+#    Install deps only when missing or the lockfile changed (e.g. after a pull).
+if [ ! -d node_modules ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+  echo "· 의존성을 설치합니다 (최초 실행/변경 시, 수 분 소요될 수 있음)..."
+  npm install
+else
+  echo "✓ 의존성 최신"
+fi
 
-# 3) 최적화된 프로덕션 빌드 생성 / build the optimized production bundle
-#    (개발 서버가 아니라 빌드 결과를 서빙해야 빠릅니다 — 개발 모드는 훨씬 느림)
-#    Serve the built app, NOT the dev server: dev mode (unminified + React
-#    StrictMode double-render) is much slower.
-echo "· 최적화 빌드를 생성합니다 (수십 초 소요될 수 있음)..."
-npm run build
+# 3) 빌드: dist가 없거나 소스가 마지막 빌드보다 새 경우에만 (변경 없으면 건너뜀)
+#    Rebuild only when dist is missing or the source changed since the last build.
+#    (개발 서버가 아니라 빌드 결과를 서빙해야 빠릅니다 — 개발 모드는 훨씬 느림.)
+NEED_BUILD=0
+if [ ! -f dist/index.html ]; then
+  NEED_BUILD=1
+elif [ -n "$(find src public index.html vite.config.ts tsconfig.json package.json -newer dist/index.html 2>/dev/null)" ]; then
+  NEED_BUILD=1
+fi
+if [ "$NEED_BUILD" = "1" ]; then
+  echo "· 앱을 빌드합니다 (변경 감지, 수십 초 소요될 수 있음)..."
+  ./node_modules/.bin/vite build
+else
+  echo "✓ 빌드 최신 (건너뜀)"
+fi
 
 # 4) 미리보기 서버 실행 (vite가 브라우저를 자동으로 엽니다)
 #    serve the build — vite opens the browser automatically
