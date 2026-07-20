@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { argHint, funcTokenAt, matchFunctions } from '../lib/formula'
 
@@ -8,6 +8,12 @@ interface Options {
   active: boolean
   /** Replace the input's value and place the caret. */
   apply: (nextValue: string, caret: number) => void
+}
+
+/** Imperative handle so the host can drive the popup without re-rendering itself. */
+export interface FormulaACHandle {
+  reposition: () => void
+  onKeyDown: (e: React.KeyboardEvent) => boolean
 }
 
 interface PopState {
@@ -22,11 +28,15 @@ interface PopState {
 const EMPTY: PopState = { items: [], idx: 0, hint: null, tokenStart: -1, top: 0, left: 0 }
 
 /**
- * Function-name autocomplete + argument hint for a formula input. Returns a
- * popup node to render, a keydown handler (returns true when it consumed the
- * event), and a `reposition` callback to call on caret moves.
+ * Function-name autocomplete + argument hint for a formula input. Self-contained:
+ * it owns the popup state so updating suggestions (e.g. while typing a formula)
+ * re-renders only this component, never the host grid/formula bar. The host drives
+ * it through the imperative handle (`reposition`, `onKeyDown`).
  */
-export function useFormulaAutocomplete({ inputRef, active, apply }: Options) {
+export const FormulaAutocomplete = forwardRef<FormulaACHandle, Options>(function FormulaAutocomplete(
+  { inputRef, active, apply },
+  ref,
+) {
   const [pop, setPop] = useState<PopState>(EMPTY)
   const popRef = useRef(pop)
   popRef.current = pop
@@ -110,26 +120,25 @@ export function useFormulaAutocomplete({ inputRef, active, apply }: Options) {
     [applyName],
   )
 
-  const node =
-    pop.items.length || pop.hint ? (
-      <div className="fx-pop" style={{ top: pop.top, left: pop.left }}>
-        {pop.items.length ? (
-          pop.items.map((name, i) => (
-            <div
-              key={name}
-              className={`fx-item${i === pop.idx ? ' active' : ''}`}
-              // Keep the input focused so selecting doesn't commit the edit.
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => applyName(name)}
-            >
-              <span className="fx-fn">{name}</span>
-            </div>
-          ))
-        ) : (
-          <div className="fx-hint">{pop.hint}</div>
-        )}
-      </div>
-    ) : null
+  useImperativeHandle(ref, () => ({ reposition: recompute, onKeyDown }), [recompute, onKeyDown])
 
-  return { node, onKeyDown, reposition: recompute }
-}
+  return pop.items.length || pop.hint ? (
+    <div className="fx-pop" style={{ top: pop.top, left: pop.left }}>
+      {pop.items.length ? (
+        pop.items.map((name, i) => (
+          <div
+            key={name}
+            className={`fx-item${i === pop.idx ? ' active' : ''}`}
+            // Keep the input focused so selecting doesn't commit the edit.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => applyName(name)}
+          >
+            <span className="fx-fn">{name}</span>
+          </div>
+        ))
+      ) : (
+        <div className="fx-hint">{pop.hint}</div>
+      )}
+    </div>
+  ) : null
+})

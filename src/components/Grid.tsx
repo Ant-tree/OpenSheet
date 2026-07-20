@@ -13,7 +13,7 @@ import { condStyleFor } from '../lib/condFormat'
 import { colToLetter, isInSelection, key, selectionBounds } from '../lib/utils'
 import type { BorderSide, CellBorders, CellFormat, MergeRange } from '../types'
 import ContextMenu from './ContextMenu'
-import { useFormulaAutocomplete } from './FormulaAutocomplete'
+import { FormulaAutocomplete, type FormulaACHandle } from './FormulaAutocomplete'
 import FilterDropdown from './FilterDropdown'
 
 /**
@@ -319,22 +319,20 @@ export default function Grid() {
   }
 
   // Formula function-name autocomplete + argument hint for the cell editor.
-  const ac = useFormulaAutocomplete({
-    inputRef,
-    active: !!editing,
-    apply: (next, caret) => {
-      refRange.current = null
-      editValueRef.current = next
-      if (inputRef.current) inputRef.current.value = next
-      requestAnimationFrame(() => {
-        const el = inputRef.current
-        if (el) {
-          el.focus({ preventScroll: true })
-          el.setSelectionRange(caret, caret)
-        }
-      })
-    },
-  })
+  // A ref-driven component so its popup updates never re-render the grid.
+  const acRef = useRef<FormulaACHandle>(null)
+  const acApply = useCallback((next: string, caret: number) => {
+    refRange.current = null
+    editValueRef.current = next
+    if (inputRef.current) inputRef.current.value = next
+    requestAnimationFrame(() => {
+      const el = inputRef.current
+      if (el) {
+        el.focus({ preventScroll: true })
+        el.setSelectionRange(caret, caret)
+      }
+    })
+  }, [])
 
   // The active cell always hosts a focused input — even when not editing — so it
   // captures the first keystroke, including IME composition (Korean). Starting
@@ -367,12 +365,12 @@ export default function Grid() {
     // The user typed, so any auto-inserted reference is now committed text.
     refRange.current = null
     editValueRef.current = e.target.value
-    ac.reposition() // refresh the autocomplete popup (no grid re-render for plain text)
+    acRef.current?.reposition() // refresh the autocomplete popup (no grid re-render)
   }
 
   const onEditorKeyDown = (e: React.KeyboardEvent) => {
     if (composingRef.current || e.nativeEvent.isComposing) return // don't disturb IME
-    if (ac.onKeyDown(e)) return // autocomplete popup consumed the key
+    if (acRef.current?.onKeyDown(e)) return // autocomplete popup consumed the key
     const isEditing = !!useStore.getState().editing
     const k = e.key
     if (isEditing) {
@@ -752,7 +750,7 @@ export default function Grid() {
                           className={`cell-input${isEditing ? ' editing' : ''}`}
                           onChange={onEditorChange}
                           onKeyDown={onEditorKeyDown}
-                          onSelect={ac.reposition}
+                          onSelect={() => acRef.current?.reposition()}
                           onCompositionStart={onCompositionStart}
                           onCompositionEnd={onCompositionEnd}
                           onBlur={() => commitEdit('none')}
@@ -847,7 +845,7 @@ export default function Grid() {
           </div>
         </>
       )}
-      {ac.node}
+      <FormulaAutocomplete ref={acRef} inputRef={inputRef} active={!!editing} apply={acApply} />
     </div>
   )
 }

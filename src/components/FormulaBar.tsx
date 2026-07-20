@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { cellRefToA1 } from '../lib/utils'
 import { useT } from '../i18n'
-import { useFormulaAutocomplete } from './FormulaAutocomplete'
+import { FormulaAutocomplete, type FormulaACHandle } from './FormulaAutocomplete'
 
 export default function FormulaBar() {
   const t = useT()
@@ -22,20 +22,17 @@ export default function FormulaBar() {
     if (!focused) setValue(getRaw(row, col))
   }, [row, col, rev, focused, getRaw])
 
-  const ac = useFormulaAutocomplete({
-    inputRef,
-    active: focused,
-    apply: (next, caret) => {
-      setValue(next)
-      requestAnimationFrame(() => {
-        const el = inputRef.current
-        if (el) {
-          el.focus()
-          el.setSelectionRange(caret, caret)
-        }
-      })
-    },
-  })
+  const acRef = useRef<FormulaACHandle>(null)
+  const acApply = useCallback((next: string, caret: number) => {
+    setValue(next)
+    requestAnimationFrame(() => {
+      const el = inputRef.current
+      if (el) {
+        el.focus()
+        el.setSelectionRange(caret, caret)
+      }
+    })
+  }, [])
 
   const commit = () => {
     setCellContent(row, col, value)
@@ -53,13 +50,13 @@ export default function FormulaBar() {
         placeholder={t('formulaPlaceholder')}
         onChange={(e) => {
           setValue(e.target.value)
-          ac.reposition()
+          acRef.current?.reposition()
         }}
         onFocus={() => setFocused(true)}
         onBlur={commit}
-        onSelect={ac.reposition}
+        onSelect={() => acRef.current?.reposition()}
         onKeyDown={(e) => {
-          if (ac.onKeyDown(e)) return
+          if (acRef.current?.onKeyDown(e)) return
           if (e.key === 'Enter') {
             e.preventDefault()
             commit()
@@ -71,7 +68,7 @@ export default function FormulaBar() {
           }
         }}
       />
-      {ac.node}
+      <FormulaAutocomplete ref={acRef} inputRef={inputRef} active={focused} apply={acApply} />
     </div>
   )
 }
