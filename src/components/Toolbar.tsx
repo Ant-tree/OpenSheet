@@ -598,6 +598,7 @@ export default function Toolbar({
         <SavedDialog
           result={savedModal}
           title={t('savedTitle')}
+          locationLabel={t('savedLocation')}
           body={t('savedBody')}
           shareLabel={t('savedShare')}
           closeLabel={t('close')}
@@ -612,6 +613,7 @@ export default function Toolbar({
 function SavedDialog({
   result,
   title,
+  locationLabel,
   body,
   shareLabel,
   closeLabel,
@@ -619,12 +621,20 @@ function SavedDialog({
 }: {
   result: NativeSaveResult
   title: string
+  locationLabel: string
   body: string
   shareLabel: string
   closeLabel: string
   onClose: () => void
 }) {
   const [sharing, setSharing] = useState(false)
+  // Human-readable on-device path (strip the file:// scheme, decode %20 etc.).
+  let path = result.uri
+  try {
+    path = decodeURIComponent(result.uri.replace(/^file:\/\//, ''))
+  } catch {
+    /* keep the raw uri if it isn't decodable */
+  }
   const share = async () => {
     setSharing(true)
     try {
@@ -639,7 +649,8 @@ function SavedDialog({
     <div className="saveas-overlay">
       <div className="saveas-modal">
         <div className="saved-title">{title}</div>
-        <div className="saved-name">{result.filename}</div>
+        <div className="saveas-label">{locationLabel}</div>
+        <div className="saved-path">{path}</div>
         <div className="saveas-label">{body}</div>
         <div className="saveas-actions">
           <button className="saveas-btn" onClick={onClose}>
