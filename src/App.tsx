@@ -13,7 +13,13 @@ import { useStore } from './store/useStore'
 import type { SerializedDoc } from './store/useStore'
 import { loadDraft, saveDraft } from './lib/recentFiles'
 import { iterateSelection } from './lib/utils'
-import { exportWorkbook, saveToHandle } from './lib/fileIO'
+import {
+  exportWorkbook,
+  saveToHandle,
+  saveWorkbookAs,
+  saveWorkbookToPath,
+  isTauri,
+} from './lib/fileIO'
 import { t as translate, useLangStore, useT } from './i18n'
 import { useThemeStore, type Theme } from './theme'
 import { useZoomStore, MIN_ZOOM, MAX_ZOOM } from './zoom'
@@ -66,7 +72,31 @@ export default function App() {
         const onErr = (err: Error) =>
           alert(translate('saveFail', useLangStore.getState().lang) + err.message)
         if (store.fileHandle) {
+          // Chromium: save in place through the File System Access handle.
           saveToHandle(store.hf, store.sheets, store.fileHandle, store.charts).catch(onErr)
+        } else if (isTauri()) {
+          // Desktop app: save in place to the known path, else prompt (and
+          // remember it). Never a silent download to ~/Downloads.
+          void (async () => {
+            try {
+              if (store.filePath) {
+                const fmt = store.filePath.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx'
+                try {
+                  await saveWorkbookToPath(store.hf, store.sheets, store.filePath, fmt, store.charts)
+                  return
+                } catch {
+                  /* command missing (older build) — fall through to the dialog */
+                }
+              }
+              const res = await saveWorkbookAs(store.hf, store.sheets, store.fileName, 'xlsx', store.charts)
+              if (res) {
+                useStore.setState({ fileName: res.name })
+                if (res.path) useStore.getState().setFilePath(res.path)
+              }
+            } catch (err) {
+              onErr(err as Error)
+            }
+          })()
         } else {
           exportWorkbook(store.hf, store.sheets, store.fileName, 'xlsx', store.charts).catch(onErr)
         }

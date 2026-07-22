@@ -36,6 +36,14 @@ async fn save_workbook_as(
   }
 }
 
+/// Write the workbook bytes straight to a known path (no dialog). Used for
+/// "Save" (Cmd+S) once the file's location is known, so it saves in place
+/// instead of prompting or downloading a copy.
+#[tauri::command]
+async fn save_workbook_to_path(path: String, bytes: Vec<u8>) -> Result<(), String> {
+  std::fs::write(&path, &bytes).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -50,7 +58,11 @@ pub fn run() {
       Ok(())
     })
     .plugin(tauri_plugin_dialog::init())
-    .invoke_handler(tauri::generate_handler![print_page, save_workbook_as])
+    .invoke_handler(tauri::generate_handler![
+      print_page,
+      save_workbook_as,
+      save_workbook_to_path
+    ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
