@@ -636,8 +636,8 @@ function SavedDialog({
     }
   }
   return createPortal(
-    <div className="saveas-overlay" onMouseDown={onClose}>
-      <div className="saveas-modal" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="saveas-overlay">
+      <div className="saveas-modal">
         <div className="saved-title">{title}</div>
         <div className="saved-name">{result.filename}</div>
         <div className="saveas-label">{body}</div>
@@ -683,8 +683,8 @@ function SaveAsDialog({
   }, [])
   const confirm = () => onConfirm(val)
   return createPortal(
-    <div className="saveas-overlay" onMouseDown={onCancel}>
-      <div className="saveas-modal" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="saveas-overlay">
+      <div className="saveas-modal">
         <label className="saveas-label">{label}</label>
         <input
           ref={inputRef}
