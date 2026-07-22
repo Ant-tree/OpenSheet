@@ -691,15 +691,11 @@ export async function saveWorkbookAs(
     return { handle, name: handle.name }
   }
 
-  // Capacitor native app (iOS/Android): no picker/prompt to rely on — write the
-  // file and open the share sheet (the user names/places it there).
-  if ((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) {
-    await exportWorkbook(hf, sheets, suggested, format, charts)
-    return { handle: null, name: suggested }
-  }
-
-  // Other browsers: no native "save as" dialog exists — ask for a name so the
-  // download isn't always the default filename, then download.
+  // Everything else — Capacitor native apps (iOS/Android) and browsers without a
+  // native "save as" dialog (Safari/Firefox/mobile): ask for a name, then write.
+  // On native the OS share sheet can't rename the file, so this prompt is the
+  // only chance to name it; exportWorkbook then routes to the share sheet. The
+  // app already relies on window.prompt on native (sheet rename uses it too).
   const lang = useLangStore.getState().lang
   const chosen = window.prompt(t('saveAsPrompt', lang), suggested)
   if (chosen === null) return undefined
