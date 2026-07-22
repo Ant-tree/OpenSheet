@@ -15,7 +15,14 @@ import { t, useLangStore } from '../i18n'
 import { strongerBorder } from './format'
 import { opFromExcel, opToExcel } from './condFormat'
 import { chartToSvgString, svgToPngDataUrl } from './chartRender'
-import { isNativePlatform, saveFileNative, safSaveDocument, type NativeSaveResult } from './nativeSave'
+import {
+  isNativePlatform,
+  saveFileNative,
+  safSaveDocument,
+  safOpenDocument,
+  safReadDocument,
+  type NativeSaveResult,
+} from './nativeSave'
 import { invoke, isTauri as tauriIsTauri } from '@tauri-apps/api/core'
 
 /** True when running inside the Tauri desktop app (official detection). */
@@ -523,6 +530,38 @@ export async function readWorkbookFromPath(path: string): Promise<ImportedWorkbo
   const byteArray = (await invoke('read_file', { path })) as number[]
   const name = path.split(/[\\/]/).pop() || 'workbook.xlsx'
   return readWorkbookFile(new File([new Uint8Array(byteArray)], name))
+}
+
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
+  const bin = atob(b64)
+  const buf = new ArrayBuffer(bin.length)
+  const bytes = new Uint8Array(buf)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes
+}
+
+/** Android: open a workbook via SAF, returning the parsed workbook, its persisted
+ *  URI (so it can be reopened fresh) and raw bytes (recents fallback). */
+export async function openWorkbookAndroid(): Promise<{
+  uri: string
+  wb: ImportedWorkbook
+  bytes: ArrayBuffer
+} | null> {
+  const res = await safOpenDocument()
+  if (!res) return null
+  const bytes = base64ToBytes(res.data)
+  const wb = await readWorkbookFile(new File([bytes], res.name))
+  return { uri: res.uri, wb, bytes: bytes.buffer }
+}
+
+/** Android: re-read + parse a workbook from a persisted SAF URI (reopen fresh). */
+export async function readWorkbookFromUri(
+  uri: string,
+  name: string,
+): Promise<ImportedWorkbook | null> {
+  const data = await safReadDocument(uri)
+  if (!data) return null
+  return readWorkbookFile(new File([base64ToBytes(data)], name))
 }
 
 /**

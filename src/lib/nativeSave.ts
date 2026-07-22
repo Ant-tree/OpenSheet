@@ -13,8 +13,38 @@ interface SafSaverPlugin {
     filename: string
     mimeType: string
   }): Promise<{ saved: boolean; uri?: string }>
+  openDocument(): Promise<{ cancelled?: boolean; uri?: string; name?: string; data?: string }>
+  readDocument(options: { uri: string }): Promise<{ data: string }>
 }
 const SafSaver = registerPlugin<SafSaverPlugin>('SafSaver')
+
+/** Android: open a document via SAF, returning its persisted URI + name + base64
+ *  bytes, or null if cancelled / unavailable. */
+export async function safOpenDocument(): Promise<{
+  uri: string
+  name: string
+  data: string
+} | null> {
+  if (nativePlatform() !== 'android') return null
+  try {
+    const res = await SafSaver.openDocument()
+    if (res.cancelled || !res.uri || !res.data) return null
+    return { uri: res.uri, name: res.name || 'workbook.xlsx', data: res.data }
+  } catch {
+    return null
+  }
+}
+
+/** Android: re-read a previously opened document by its persisted URI (base64). */
+export async function safReadDocument(uri: string): Promise<string | null> {
+  if (nativePlatform() !== 'android') return null
+  try {
+    const res = await SafSaver.readDocument({ uri })
+    return res.data ?? null
+  } catch {
+    return null
+  }
+}
 
 /**
  * Show the Android "Save As" system dialog (SAF) and write `base64` to the

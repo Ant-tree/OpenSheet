@@ -7,7 +7,9 @@ import {
   exportWorkbook,
   pickAndReadWorkbook,
   openWorkbookTauri,
+  openWorkbookAndroid,
   readWorkbookFromPath,
+  readWorkbookFromUri,
   isTauri,
   saveToHandle,
   saveWorkbookAs,
@@ -223,6 +225,20 @@ export default function Toolbar({
       }
       return
     }
+    if (nativePlatform() === 'android') {
+      // Android: SAF open with a persisted URI, so Recent re-reads the file fresh.
+      try {
+        const res = await openWorkbookAndroid()
+        if (!res) return
+        loadWorkbook(res.wb.sheets, res.wb.fileName)
+        setFileHandle(null)
+        setFilePath(null)
+        addRecentFile(res.wb.fileName, res.bytes, { uri: res.uri })
+      } catch (err) {
+        alert(t('readFail') + (err as Error).message)
+      }
+      return
+    }
     if (CAN_SAVE_IN_PLACE) {
       try {
         const result = await pickAndReadWorkbook()
@@ -260,6 +276,8 @@ export default function Toolbar({
       let wb
       if (f.path && isTauri()) {
         wb = await readWorkbookFromPath(f.path)
+      } else if (f.uri && nativePlatform() === 'android') {
+        wb = await readWorkbookFromUri(f.uri, f.name)
       }
       if (!wb) {
         wb = await readWorkbookFile(new File([f.bytes], f.name))
