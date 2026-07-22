@@ -13,14 +13,7 @@ import { useStore } from './store/useStore'
 import type { SerializedDoc } from './store/useStore'
 import { loadDraft, saveDraft } from './lib/recentFiles'
 import { iterateSelection } from './lib/utils'
-import {
-  exportWorkbook,
-  saveToHandle,
-  saveWorkbookAs,
-  saveWorkbookToPath,
-  readWorkbookFromPath,
-  isTauri,
-} from './lib/fileIO'
+import { exportWorkbook, saveToHandle } from './lib/fileIO'
 import { t as translate, useLangStore, useT } from './i18n'
 import { useThemeStore, type Theme } from './theme'
 import { useZoomStore, MIN_ZOOM, MAX_ZOOM } from './zoom'
@@ -73,31 +66,7 @@ export default function App() {
         const onErr = (err: Error) =>
           alert(translate('saveFail', useLangStore.getState().lang) + err.message)
         if (store.fileHandle) {
-          // Chromium: save in place through the File System Access handle.
           saveToHandle(store.hf, store.sheets, store.fileHandle, store.charts).catch(onErr)
-        } else if (isTauri()) {
-          // Desktop app: save in place to the known path, else prompt (and
-          // remember it). Never a silent download to ~/Downloads.
-          void (async () => {
-            try {
-              if (store.filePath) {
-                const fmt = store.filePath.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx'
-                try {
-                  await saveWorkbookToPath(store.hf, store.sheets, store.filePath, fmt, store.charts)
-                  return
-                } catch {
-                  /* command missing (older build) — fall through to the dialog */
-                }
-              }
-              const res = await saveWorkbookAs(store.hf, store.sheets, store.fileName, 'xlsx', store.charts)
-              if (res) {
-                useStore.setState({ fileName: res.name })
-                if (res.path) useStore.getState().setFilePath(res.path)
-              }
-            } catch (err) {
-              onErr(err as Error)
-            }
-          })()
         } else {
           exportWorkbook(store.hf, store.sheets, store.fileName, 'xlsx', store.charts).catch(onErr)
         }
@@ -186,32 +155,11 @@ export default function App() {
 
   // Autosave to IndexedDB and recover the last session on load.
   useEffect(() => {
-    const restoreDraft = () =>
-      loadDraft<SerializedDoc>()
-        .then((d) => {
-          if (d) useStore.getState().restoreState(d)
-        })
-        .catch(() => {})
-
-    // Desktop app with a remembered file: reopen it FRESH from disk so edits
-    // made in another editor are picked up (instead of the stale autosaved
-    // draft). Falls back to the draft if the file is gone or unreadable.
-    const startPath = useStore.getState().filePath
-    if (isTauri() && startPath) {
-      readWorkbookFromPath(startPath)
-        .then((wb) => {
-          if (wb) {
-            const s = useStore.getState()
-            s.loadWorkbook(wb.sheets, wb.fileName)
-            s.setFilePath(startPath)
-          } else {
-            void restoreDraft()
-          }
-        })
-        .catch(() => void restoreDraft())
-    } else {
-      void restoreDraft()
-    }
+    loadDraft<SerializedDoc>()
+      .then((d) => {
+        if (d) useStore.getState().restoreState(d)
+      })
+      .catch(() => {})
     let timer: number
     let lastRev = useStore.getState().rev
     const unsub = useStore.subscribe((state) => {
