@@ -23,16 +23,19 @@ function blobToBase64(blob: Blob): Promise<string> {
  * so the caller can fall back to a normal browser download.
  */
 export async function saveOnNative(blob: Blob, filename: string): Promise<boolean> {
-  const cap = Capacitor as unknown as { isNativePlatform?: () => boolean }
+  const cap = Capacitor as unknown as {
+    isNativePlatform?: () => boolean
+    getPlatform?: () => string
+  }
   if (!cap?.isNativePlatform?.()) return false
+  const platform = cap.getPlatform?.() ?? ''
 
   const [{ Filesystem, Directory }, { Share }] = await Promise.all([
     import('@capacitor/filesystem'),
     import('@capacitor/share'),
   ])
   const data = await blobToBase64(blob)
-  // writeFile returns the file's uri directly — use it for sharing (works on
-  // both iOS and Android; the Share plugin handles the Android FileProvider).
+  // writeFile returns the file's uri directly — used below for sharing.
   const { uri } = await Filesystem.writeFile({
     path: filename,
     data,
@@ -40,7 +43,15 @@ export async function saveOnNative(blob: Blob, filename: string): Promise<boolea
     recursive: true,
   })
   try {
-    await Share.share({ title: filename, url: uri, dialogTitle: filename })
+    // Android must receive the file in `files` (the plugin exposes it through
+    // its FileProvider); passing a bare `file://` in `url` there does NOT attach
+    // the file — the share sheet silently no-ops, so "Save As" appeared to do
+    // nothing. iOS shares the file correctly via `url`.
+    await Share.share(
+      platform === 'android'
+        ? { title: filename, dialogTitle: filename, files: [uri] }
+        : { title: filename, dialogTitle: filename, url: uri },
+    )
   } catch (err) {
     // Dismissing the share sheet rejects with "Share canceled" — not an error.
     const msg = String((err as { message?: string })?.message ?? err)
