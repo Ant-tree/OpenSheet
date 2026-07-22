@@ -15,7 +15,7 @@ import { t, useLangStore } from '../i18n'
 import { strongerBorder } from './format'
 import { opFromExcel, opToExcel } from './condFormat'
 import { chartToSvgString, svgToPngDataUrl } from './chartRender'
-import { saveOnNative } from './nativeSave'
+import { isNativePlatform, saveFileNative, type NativeSaveResult } from './nativeSave'
 
 /** sheet id -> charts inserted on it. */
 export type ChartsBySheet = Record<number, ChartSpec[]>
@@ -474,34 +474,28 @@ export async function exportWorkbook(
   fileName: string,
   format: 'xlsx' | 'csv',
   charts?: ChartsBySheet,
-): Promise<void> {
+): Promise<NativeSaveResult | null> {
   const buf = await workbookBuffer(hf, sheets, format, charts)
   const base = fileName.replace(/\.(xlsx|csv)$/i, '')
   const type =
     format === 'csv'
       ? 'text/csv;charset=utf-8'
       : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  await deliverFile(new Blob([buf], { type }), `${base}.${format}`)
+  return deliverFile(new Blob([buf], { type }), `${base}.${format}`)
 }
 
 /**
- * Hand a generated file to the user: on a Capacitor native app write it and
- * open the share sheet (web views can't download `blob:` URLs), otherwise
- * trigger a normal browser download.
- *
- * On a native platform we do NOT silently fall back to a `blob:` download — it
- * can't work there, so a failure is surfaced (the caller alerts) instead of
- * doing nothing.
+ * Hand a generated file to the user. On a Capacitor native app (web views can't
+ * download `blob:` URLs) we write it to a user-accessible folder and return the
+ * location so the caller can confirm it and offer a Share button. In a browser
+ * we trigger a normal download and return null.
  */
-async function deliverFile(blob: Blob, filename: string): Promise<void> {
-  const isNative = (
-    window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }
-  ).Capacitor?.isNativePlatform?.()
-  if (isNative) {
-    await saveOnNative(blob, filename)
-    return
+async function deliverFile(blob: Blob, filename: string): Promise<NativeSaveResult | null> {
+  if (isNativePlatform()) {
+    return await saveFileNative(blob, filename)
   }
   downloadBlob(blob, filename)
+  return null
 }
 
 /** Serialize the current state into an xlsx/csv byte buffer. */
@@ -615,6 +609,8 @@ export async function saveToHandle(
 export interface SaveAsResult {
   handle: FileSystemFileHandle | null
   name: string
+  /** On a native app, where the file was written (so the UI can confirm/share it). */
+  saved?: NativeSaveResult
 }
 
 /**
@@ -706,8 +702,12 @@ export async function saveWorkbookAs(
   const chosen = await promptName(suggested)
   if (chosen === null) return undefined
   const trimmed = chosen.trim() || suggested
-  await exportWorkbook(hf, sheets, trimmed, format, charts)
-  return { handle: null, name: `${trimmed.replace(/\.(xlsx|csv)$/i, '')}.${format}` }
+  const saved = await exportWorkbook(hf, sheets, trimmed, format, charts)
+  return {
+    handle: null,
+    name: `${trimmed.replace(/\.(xlsx|csv)$/i, '')}.${format}`,
+    saved: saved ?? undefined,
+  }
 }
 
 /** Build an exceljs workbook from HyperFormula state + formats (no download). */

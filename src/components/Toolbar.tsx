@@ -10,6 +10,7 @@ import {
   saveWorkbookAs,
   supportsFileSystemAccess,
 } from '../lib/fileIO'
+import { shareFileNative, type NativeSaveResult } from '../lib/nativeSave'
 import { printPage } from '../lib/print'
 import {
   NUMBER_FORMAT_PRESETS,
@@ -179,6 +180,9 @@ export default function Toolbar({
     r?.(value)
   }
 
+  // After a native save, confirm where the file landed and offer to share it.
+  const [savedModal, setSavedModal] = useState<NativeSaveResult | null>(null)
+
   const toggle = (kProp: 'bold' | 'italic' | 'underline') =>
     applyFormat({ [kProp]: !active?.[kProp] })
 
@@ -242,7 +246,8 @@ export default function Toolbar({
   const save = async (format: 'xlsx' | 'csv') => {
     const { hf, sheets, fileName, charts } = useStore.getState()
     try {
-      await exportWorkbook(hf, sheets, fileName, format, charts)
+      const saved = await exportWorkbook(hf, sheets, fileName, format, charts)
+      if (saved) setSavedModal(saved) // native app: confirm location + offer share
     } catch (err) {
       alert(t('saveFail') + (err as Error).message)
     }
@@ -256,6 +261,7 @@ export default function Toolbar({
       const res = await saveWorkbookAs(hf, sheets, fileName, 'xlsx', charts, promptFileName)
       if (!res) return // user cancelled
       useStore.setState({ fileName: res.name, fileHandle: res.handle })
+      if (res.saved) setSavedModal(res.saved) // native app: confirm location + share
     } catch (err) {
       alert(t('saveFail') + (err as Error).message)
     }
@@ -576,7 +582,64 @@ export default function Toolbar({
           onCancel={() => resolveNameModal(null)}
         />
       )}
+      {savedModal && (
+        <SavedDialog
+          result={savedModal}
+          title={t('savedTitle')}
+          body={t('savedBody')}
+          shareLabel={t('savedShare')}
+          closeLabel={t('close')}
+          onClose={() => setSavedModal(null)}
+        />
+      )}
     </div>
+  )
+}
+
+/** Confirmation shown after a native save: where the file went + a Share button. */
+function SavedDialog({
+  result,
+  title,
+  body,
+  shareLabel,
+  closeLabel,
+  onClose,
+}: {
+  result: NativeSaveResult
+  title: string
+  body: string
+  shareLabel: string
+  closeLabel: string
+  onClose: () => void
+}) {
+  const [sharing, setSharing] = useState(false)
+  const share = async () => {
+    setSharing(true)
+    try {
+      await shareFileNative(result)
+    } catch {
+      /* surfaced by the platform; ignore here */
+    } finally {
+      setSharing(false)
+    }
+  }
+  return createPortal(
+    <div className="saveas-overlay" onMouseDown={onClose}>
+      <div className="saveas-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="saved-title">{title}</div>
+        <div className="saved-name">{result.filename}</div>
+        <div className="saveas-label">{body}</div>
+        <div className="saveas-actions">
+          <button className="saveas-btn" onClick={onClose}>
+            {closeLabel}
+          </button>
+          <button className="saveas-btn primary" onClick={share} disabled={sharing}>
+            {shareLabel}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 

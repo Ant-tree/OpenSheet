@@ -932,6 +932,24 @@ table.grid {
   border-color: var(--accent);
   color: #fff;
 }
+.saveas-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.saved-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.saved-name {
+  font-size: 14px;
+  color: var(--fg);
+  word-break: break-all;
+  padding: 6px 8px;
+  background: var(--cell-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
 
 /* Chart modal */
 .chart-overlay {
