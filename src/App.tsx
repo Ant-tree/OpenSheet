@@ -15,6 +15,7 @@ import { iterateSelection } from './lib/utils'
 import { exportWorkbook, saveToHandle } from './lib/fileIO'
 import { t as translate, useLangStore, useT } from './i18n'
 import { useThemeStore, type Theme } from './theme'
+import { useZoomStore, MIN_ZOOM, MAX_ZOOM } from './zoom'
 
 export default function App() {
   const t = useT()
@@ -26,6 +27,10 @@ export default function App() {
   const setLang = useLangStore((s) => s.setLang)
   const theme = useThemeStore((s) => s.theme)
   const setTheme = useThemeStore((s) => s.setTheme)
+  const zoom = useZoomStore((s) => s.zoom)
+  const zoomIn = useZoomStore((s) => s.zoomIn)
+  const zoomOut = useZoomStore((s) => s.zoomOut)
+  const resetZoom = useZoomStore((s) => s.resetZoom)
   const selection = useStore((s) => s.selection)
   const fileName = useStore((s) => s.fileName)
   useStore((s) => s.rev)
@@ -71,6 +76,32 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'h')) {
         e.preventDefault()
         setFindMode(e.key === 'h' ? 'replace' : 'find')
+        return
+      }
+
+      // Zoom the grid (Ctrl/Cmd with + / - / 0). Works everywhere, even mid-edit.
+      if (e.metaKey || e.ctrlKey) {
+        if (e.key === '=' || e.key === '+') {
+          e.preventDefault()
+          useZoomStore.getState().zoomIn()
+          return
+        }
+        if (e.key === '-' || e.key === '_') {
+          e.preventDefault()
+          useZoomStore.getState().zoomOut()
+          return
+        }
+        if (e.key === '0') {
+          e.preventDefault()
+          useZoomStore.getState().resetZoom()
+          return
+        }
+      }
+
+      // Switch between sheet tabs (Ctrl/Cmd + PageUp / PageDown, Excel-style).
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'PageUp' || e.key === 'PageDown')) {
+        e.preventDefault()
+        useStore.getState().moveActiveSheet(e.key === 'PageDown' ? 1 : -1)
         return
       }
 
@@ -215,6 +246,27 @@ export default function App() {
             </span>
           </>
         )}
+        <div className="zoom-control">
+          <button
+            className="zoom-btn"
+            title={t('zoomOut')}
+            onClick={zoomOut}
+            disabled={zoom <= MIN_ZOOM}
+          >
+            −
+          </button>
+          <button className="zoom-label" title={t('zoomReset')} onClick={resetZoom}>
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            className="zoom-btn"
+            title={t('zoomIn')}
+            onClick={zoomIn}
+            disabled={zoom >= MAX_ZOOM}
+          >
+            +
+          </button>
+        </div>
         <select
           className="lang-select"
           title={t('theme')}

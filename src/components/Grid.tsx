@@ -11,10 +11,15 @@ import {
 import { borderCss, displayValue, strongerBorder } from '../lib/format'
 import { condStyleFor } from '../lib/condFormat'
 import { colToLetter, isInSelection, key, selectionBounds } from '../lib/utils'
-import type { BorderSide, CellBorders, CellFormat, MergeRange } from '../types'
+import type { BorderSide, CellBorders, CellFormat, CellRef, MergeRange } from '../types'
+import { useZoomStore } from '../zoom'
 import ContextMenu from './ContextMenu'
 import { FormulaAutocomplete, type FormulaACHandle } from './FormulaAutocomplete'
 import FilterDropdown from './FilterDropdown'
+
+/** True when the primary pointer is touch (phones/tablets): enables touch-drag
+ *  selection handles and disables desktop-only formula "point mode" by tap. */
+const IS_COARSE = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
 
 /**
  * Compute the borders to actually paint for a rendered cell (a normal cell, or
@@ -81,6 +86,19 @@ export default function Grid() {
   const sheets = useStore((s) => s.sheets)
   const sheet = useMemo(() => sheets.find((x) => x.id === activeSheetId)!, [sheets, activeSheetId])
 
+  // ----- zoom -----
+  // A view-only scale factor. All grid geometry (row height, header size, column
+  // widths, font size) is derived from these so the virtualization math and the
+  // rendered layout stay pixel-consistent at any zoom level.
+  const zoom = useZoomStore((s) => s.zoom)
+  const RH = Math.round(DEFAULT_ROW_HEIGHT * zoom)
+  const HW = Math.round(HEADER_WIDTH * zoom)
+  const gridVars = {
+    ['--row-h' as string]: `${RH}px`,
+    ['--cell-fs' as string]: `${Math.round(13 * zoom * 10) / 10}px`,
+    ['--cell-lh' as string]: `${RH - 2}px`,
+  } as React.CSSProperties
+
   // AutoFilter view state.
   const filterHeaderRow = useStore((s) => s.filterHeaderRow)
   const filterCols = useStore((s) => s.filterCols)
@@ -128,7 +146,6 @@ export default function Grid() {
     return arr
   }, [hiddenRows])
   const renderVisualIndices = useMemo(() => {
-    const RH = DEFAULT_ROW_HEIGHT
     const overscan = 8
     const firstI = Math.max(0, Math.floor(viewport.top / RH) - overscan)
     const lastI = Math.min(
@@ -144,7 +161,7 @@ export default function Grid() {
       hiddenRows.size === 0 ? selection.focus.row : visibleRows.indexOf(selection.focus.row)
     if (activeI >= 0 && activeI < visibleRows.length) set.add(activeI)
     return [...set].sort((a, b) => a - b)
-  }, [viewport, visibleRows, sheet.frozenRows, selection.focus.row])
+  }, [viewport, visibleRows, sheet.frozenRows, selection.focus.row, RH])
 
   // Per-cell content (value text, number flag, and content-derived style: format,
   // conditional formatting, borders). This depends only on the document, never on
@@ -427,8 +444,11 @@ export default function Grid() {
     // text caret (don't commit or re-select).
     if (editing?.row === row && editing?.col === col) return
     // Formula point mode: while editing a =formula, clicking a cell inserts its
-    // reference into the formula instead of moving the selection.
-    if (inFormulaEdit()) {
+    // reference into the formula instead of moving the selection. Disabled on
+    // touch devices — there every tap lands on a cell, so point mode made it
+    // impossible to finish a formula and move on (the tapped cell appeared to
+    // receive a copy of the formula). On touch, tapping another cell commits.
+    if (!IS_COARSE && inFormulaEdit()) {
       e.preventDefault()
       pointAnchor.current = { row, col }
       dragging.current = true
@@ -550,7 +570,8 @@ export default function Grid() {
     }
     const move = (ev: MouseEvent) => {
       if (!resizeState.current) return
-      const dx = ev.clientX - resizeState.current.startX
+      // Pointer delta is in screen px; column widths are stored unscaled.
+      const dx = (ev.clientX - resizeState.current.startX) / zoom
       setColWidth(resizeState.current.col, resizeState.current.startW + dx)
     }
     const up = () => {
@@ -562,27 +583,169 @@ export default function Grid() {
     window.addEventListener('mouseup', up)
   }
 
+  // ----- touch range-selection handles (mobile) -----
+  // A plain one-finger drag scrolls the grid, so touch users can't drag-select
+  // cells directly. Instead we render two draggable dots at the selection's
+  // top-left and bottom-right corners; dragging one extends the selection
+  // (hit-testing the cell under the finger) and auto-scrolls near the edges.
+  const tlHandleRef = useRef<HTMLDivElement>(null)
+  const brHandleRef = useRef<HTMLDivElement>(null)
+  const handleFixed = useRef<CellRef | null>(null) // the corner kept still during a drag
+  const lastTouch = useRef<{ x: number; y: number } | null>(null)
+  const edgeRaf = useRef<number | null>(null)
+  // Keep the current scaled geometry reachable from the imperative listeners.
+  const rhRef = useRef(RH)
+  rhRef.current = RH
+  const hwRef = useRef(HW)
+  hwRef.current = HW
+
+  const cellFromPoint = (x: number, y: number): CellRef | null => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null
+    const td = el?.closest?.('td[data-r]') as HTMLElement | null
+    if (!td) return null
+    return { row: Number(td.getAttribute('data-r')), col: Number(td.getAttribute('data-c')) }
+  }
+
+  const positionHandles = useCallback(() => {
+    if (!IS_COARSE) return
+    const cont = scrollRef.current
+    const tl = tlHandleRef.current
+    const br = brHandleRef.current
+    if (!cont || !tl || !br) return
+    const b = selectionBounds(useStore.getState().selection)
+    const cRect = cont.getBoundingClientRect()
+    const topGuard = cRect.top + rhRef.current // below the sticky column header
+    const leftGuard = cRect.left + hwRef.current // right of the sticky row header
+    const place = (el: HTMLDivElement, r: number, c: number, atRight: boolean, atBottom: boolean) => {
+      const cell = cont.querySelector<HTMLElement>(`td[data-r="${r}"][data-c="${c}"]`)
+      if (!cell) {
+        el.style.display = 'none'
+        return
+      }
+      const rect = cell.getBoundingClientRect()
+      const x = atRight ? rect.right : rect.left
+      const y = atBottom ? rect.bottom : rect.top
+      // Hide when the corner is scrolled under a header or out of the viewport.
+      if (x < leftGuard - 1 || y < topGuard - 1 || x > cRect.right + 1 || y > cRect.bottom + 1) {
+        el.style.display = 'none'
+        return
+      }
+      el.style.display = 'block'
+      el.style.left = `${x}px`
+      el.style.top = `${y}px`
+    }
+    place(br, b.bottom, b.right, true, true)
+    place(tl, b.top, b.left, false, false)
+  }, [])
+
+  // Reposition the handles after every render (selection / zoom / scroll change).
+  useLayoutEffect(() => {
+    positionHandles()
+  })
+
+  useEffect(() => {
+    if (!IS_COARSE) return
+    const tl = tlHandleRef.current
+    const br = brHandleRef.current
+    if (!tl || !br) return
+
+    const stopEdge = () => {
+      if (edgeRaf.current != null) cancelAnimationFrame(edgeRaf.current)
+      edgeRaf.current = null
+    }
+    const applyPoint = (x: number, y: number) => {
+      const cell = cellFromPoint(x, y)
+      const fixed = handleFixed.current
+      if (cell && fixed) scheduleDrag(() => setSelection({ anchor: fixed, focus: cell }))
+    }
+    const edgeTick = () => {
+      const cont = scrollRef.current
+      const p = lastTouch.current
+      if (!handleFixed.current || !cont || !p) {
+        edgeRaf.current = null
+        return
+      }
+      const r = cont.getBoundingClientRect()
+      const M = 44 // edge margin that triggers auto-scroll
+      const SPEED = 14
+      let dx = 0
+      let dy = 0
+      if (p.y < r.top + rhRef.current + M) dy = -SPEED
+      else if (p.y > r.bottom - M) dy = SPEED
+      if (p.x < r.left + hwRef.current + M) dx = -SPEED
+      else if (p.x > r.right - M) dx = SPEED
+      if (dx || dy) {
+        cont.scrollLeft += dx
+        cont.scrollTop += dy
+        applyPoint(p.x, p.y)
+      }
+      edgeRaf.current = requestAnimationFrame(edgeTick)
+    }
+    const onMove = (e: TouchEvent) => {
+      if (!handleFixed.current) return
+      e.preventDefault() // block scrolling while extending the selection
+      const t = e.touches[0]
+      if (!t) return
+      lastTouch.current = { x: t.clientX, y: t.clientY }
+      applyPoint(t.clientX, t.clientY)
+    }
+    const onEnd = () => {
+      handleFixed.current = null
+      lastTouch.current = null
+      stopEdge()
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onEnd)
+      window.removeEventListener('touchcancel', onEnd)
+    }
+    const start = (which: 'tl' | 'br') => (e: TouchEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      cancelLongPress()
+      const b = selectionBounds(useStore.getState().selection)
+      handleFixed.current =
+        which === 'br' ? { row: b.top, col: b.left } : { row: b.bottom, col: b.right }
+      const t = e.touches[0]
+      if (t) lastTouch.current = { x: t.clientX, y: t.clientY }
+      window.addEventListener('touchmove', onMove, { passive: false })
+      window.addEventListener('touchend', onEnd)
+      window.addEventListener('touchcancel', onEnd)
+      if (edgeRaf.current == null) edgeRaf.current = requestAnimationFrame(edgeTick)
+    }
+    const startTl = start('tl')
+    const startBr = start('br')
+    tl.addEventListener('touchstart', startTl, { passive: false })
+    br.addEventListener('touchstart', startBr, { passive: false })
+    return () => {
+      tl.removeEventListener('touchstart', startTl)
+      br.removeEventListener('touchstart', startBr)
+      onEnd()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const bounds = selectionBounds(selection)
-  const colWidth = (c: number) => sheet.colWidths[c] ?? DEFAULT_COL_WIDTH
+  const colWidth = (c: number) => Math.round((sheet.colWidths[c] ?? DEFAULT_COL_WIDTH) * zoom)
   const totalWidth = useMemo(() => {
-    let w = HEADER_WIDTH
-    for (let c = 0; c < MAX_COLS; c++) w += sheet.colWidths[c] ?? DEFAULT_COL_WIDTH
+    let w = HW
+    for (let c = 0; c < MAX_COLS; c++) w += Math.round((sheet.colWidths[c] ?? DEFAULT_COL_WIDTH) * zoom)
     return w
-  }, [sheet.colWidths])
+  }, [sheet.colWidths, zoom, HW])
 
   // Freeze panes: sticky offsets (px) for the first N frozen rows / columns.
   const frozenRows = sheet.frozenRows ?? 0
   const frozenCols = sheet.frozenCols ?? 0
   const rowTop = useMemo(() => {
-    const arr = [DEFAULT_ROW_HEIGHT] // below the sticky column-header row
-    for (let r = 0; r < frozenRows; r++) arr.push(arr[r] + (sheet.rowHeights[r] ?? DEFAULT_ROW_HEIGHT))
+    const arr = [RH] // below the sticky column-header row
+    for (let r = 0; r < frozenRows; r++)
+      arr.push(arr[r] + Math.round((sheet.rowHeights[r] ?? DEFAULT_ROW_HEIGHT) * zoom))
     return arr
-  }, [sheet.rowHeights, frozenRows])
+  }, [sheet.rowHeights, frozenRows, zoom, RH])
   const colLeft = useMemo(() => {
-    const arr = [HEADER_WIDTH] // right of the sticky row-number column
-    for (let c = 0; c < frozenCols; c++) arr.push(arr[c] + (sheet.colWidths[c] ?? DEFAULT_COL_WIDTH))
+    const arr = [HW] // right of the sticky row-number column
+    for (let c = 0; c < frozenCols; c++)
+      arr.push(arr[c] + Math.round((sheet.colWidths[c] ?? DEFAULT_COL_WIDTH) * zoom))
     return arr
-  }, [sheet.colWidths, frozenCols])
+  }, [sheet.colWidths, frozenCols, zoom, HW])
 
   // Keep the active cell scrolled into view on keyboard navigation. We compute
   // this manually because native scrollIntoView ignores the sticky header/row
@@ -593,9 +756,9 @@ export default function Grid() {
     if (!container || !el) return
     const c = container.getBoundingClientRect()
     const e = el.getBoundingClientRect()
-    if (e.top < c.top + DEFAULT_ROW_HEIGHT) container.scrollTop -= c.top + DEFAULT_ROW_HEIGHT - e.top
+    if (e.top < c.top + RH) container.scrollTop -= c.top + RH - e.top
     else if (e.bottom > c.bottom) container.scrollTop += e.bottom - c.bottom
-    if (e.left < c.left + HEADER_WIDTH) container.scrollLeft -= c.left + HEADER_WIDTH - e.left
+    if (e.left < c.left + HW) container.scrollLeft -= c.left + HW - e.left
     else if (e.right > c.right) container.scrollLeft += e.right - c.right
   }, [selection.focus.row, selection.focus.col])
 
@@ -603,13 +766,14 @@ export default function Grid() {
     <div
       className="grid-scroll"
       ref={scrollRef}
+      style={gridVars}
       onTouchStart={onTouchStart}
       onTouchEnd={cancelLongPress}
       onTouchMove={cancelLongPress}
     >
       <table className="grid" style={{ width: totalWidth }}>
         <colgroup>
-          <col style={{ width: HEADER_WIDTH }} />
+          <col style={{ width: HW }} />
           {Array.from({ length: MAX_COLS }, (_, c) => (
             <col key={c} style={{ width: colWidth(c) }} />
           ))}
@@ -647,7 +811,6 @@ export default function Grid() {
         </thead>
         <tbody>
           {(() => {
-            const RH = DEFAULT_ROW_HEIGHT
             const body: ReactNode[] = []
             let prevI = -1
             const spacer = (h: number, k: string) =>
@@ -843,6 +1006,12 @@ export default function Grid() {
               </div>
             ))}
           </div>
+        </>
+      )}
+      {IS_COARSE && (
+        <>
+          <div ref={tlHandleRef} className="sel-handle" style={{ display: 'none' }} />
+          <div ref={brHandleRef} className="sel-handle" style={{ display: 'none' }} />
         </>
       )}
       <FormulaAutocomplete ref={acRef} inputRef={inputRef} active={!!editing} apply={acApply} />

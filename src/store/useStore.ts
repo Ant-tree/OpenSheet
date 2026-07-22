@@ -160,6 +160,8 @@ interface StoreState {
   removeSheet: (id: number) => void
   renameSheet: (id: number, name: string) => void
   setActiveSheet: (id: number) => void
+  /** Switch to the sheet `delta` positions away (e.g. -1 prev, +1 next). Wraps around. */
+  moveActiveSheet: (delta: number) => void
 
   /** Insert a chart onto the active sheet. */
   addChart: (spec: Omit<ChartSpec, 'id'>) => void
@@ -733,6 +735,15 @@ export const useStore = create<StoreState>((set, get) => {
         filterCols: [],
         columnFilters: {},
       })
+    },
+
+    moveActiveSheet(delta) {
+      const { sheets, activeSheetId } = get()
+      if (sheets.length < 2) return
+      const idx = sheets.findIndex((s) => s.id === activeSheetId)
+      if (idx === -1) return
+      const nextIdx = (idx + delta + sheets.length) % sheets.length
+      get().setActiveSheet(sheets[nextIdx].id)
     },
 
     addChart(spec) {

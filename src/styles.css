@@ -264,6 +264,49 @@ body {
   height: 16px;
 }
 
+/* Zoom control in the status bar */
+.zoom-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.zoom-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--menu-bg);
+  color: var(--fg);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.zoom-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+.zoom-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.zoom-label {
+  min-width: 48px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--menu-bg);
+  color: var(--fg);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.zoom-label:hover {
+  background: var(--hover);
+}
+
 /* Language selector in the status bar */
 .lang-select {
   height: 22px;
@@ -371,13 +414,16 @@ table.grid {
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
+  /* Font size scales with the in-app zoom (falls back to the base 13px). */
+  font-size: var(--cell-fs, 13px);
 }
 .grid th,
 .grid td {
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   padding: 0;
-  height: 24px;
+  /* Row height scales with the in-app zoom (must match the JS virtualization). */
+  height: var(--row-h, 24px);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -414,7 +460,7 @@ table.grid {
 .cell {
   padding: 0 5px;
   cursor: cell;
-  line-height: 22px;
+  line-height: var(--cell-lh, 22px);
 }
 .cell.num {
   text-align: right;
@@ -455,6 +501,32 @@ table.grid {
   z-index: 1;
   position: relative;
 }
+
+/* Touch range-selection handles: draggable dots pinned to the selection's
+   top-left and bottom-right corners (positioned imperatively as fixed). */
+.sel-handle {
+  position: fixed;
+  z-index: 60;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  margin-top: -12px;
+  background: transparent;
+  touch-action: none;
+}
+.sel-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  transform: translate(-50%, -50%);
+  background: var(--accent);
+  border: 2px solid var(--cell-bg);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
 .cell-text {
   display: block;
   overflow: hidden;
@@ -471,7 +543,7 @@ table.grid {
   border: none;
   outline: none;
   padding: 0 5px;
-  font-size: 13px;
+  font-size: var(--cell-fs, 13px);
   font-family: var(--font);
   color: inherit;
   background: transparent;
@@ -608,10 +680,10 @@ table.grid {
     min-width: 34px;
   }
 
-  /* 16px inputs stop iOS Safari from auto-zooming when a field is focused. */
-  .formula-input,
-  .cell-input,
-  .cell-input.editing {
+  /* The formula bar keeps a comfortable touch font (the grid editor scales with
+     the in-app zoom instead). iOS auto-zoom on focus is disabled at the viewport
+     level, so a 16px minimum is no longer needed to prevent it. */
+  .formula-input {
     font-size: 16px;
   }
 
@@ -620,9 +692,40 @@ table.grid {
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Keep the status bar clear of the home indicator. */
+  /* The fill handle is mouse-only; on touch the selection handles cover the
+     bottom-right corner, so hide it to avoid two overlapping controls. */
+  .fill-handle {
+    display: none;
+  }
+
+  /* Keep the status bar clear of the home indicator, and let it scroll
+     horizontally instead of clipping its controls on narrow screens. */
   .status-bar {
     padding-bottom: calc(4px + env(safe-area-inset-bottom));
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 12px;
+  }
+  .status-bar::-webkit-scrollbar {
+    display: none;
+  }
+  .status-bar > * {
+    flex: none;
+  }
+  .status-bar .spacer {
+    flex: 1 0 auto;
+  }
+
+  /* Bigger zoom touch targets. */
+  .zoom-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 18px;
+  }
+  .zoom-label {
+    height: 30px;
+    min-width: 52px;
+    font-size: 13px;
   }
 }
 
