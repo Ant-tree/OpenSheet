@@ -16,6 +16,12 @@ import { strongerBorder } from './format'
 import { opFromExcel, opToExcel } from './condFormat'
 import { chartToSvgString, svgToPngDataUrl } from './chartRender'
 import { isNativePlatform, saveFileNative, safSaveDocument, type NativeSaveResult } from './nativeSave'
+import { invoke, isTauri as tauriIsTauri } from '@tauri-apps/api/core'
+
+/** True when running inside the Tauri desktop app (official detection). */
+export function isTauri(): boolean {
+  return tauriIsTauri()
+}
 
 /** sheet id -> charts inserted on it. */
 export type ChartsBySheet = Record<number, ChartSpec[]>
@@ -484,15 +490,56 @@ export async function exportWorkbook(
   return deliverFile(new Blob([buf], { type }), `${base}.${format}`)
 }
 
+/** Desktop app: save the workbook straight to a known path (Cmd+S, in place). */
+export async function saveWorkbookToPath(
+  hf: HyperFormula,
+  sheets: SheetMeta[],
+  path: string,
+  format: 'xlsx' | 'csv',
+  charts?: ChartsBySheet,
+): Promise<void> {
+  const buf = await workbookBuffer(hf, sheets, format, charts)
+  await invoke('save_workbook_to_path', { path, bytes: Array.from(new Uint8Array(buf)) })
+}
+
+/** Desktop app: native Open dialog → parsed workbook + its path (for in-place
+ *  save + fresh reopen) and raw bytes (for the recents list). */
+export async function openWorkbookTauri(): Promise<{
+  path: string
+  wb: ImportedWorkbook
+  bytes: ArrayBuffer
+} | null> {
+  const res = (await invoke('open_workbook')) as [string, number[]] | null
+  if (!res) return null
+  const [path, byteArray] = res
+  const bytes = new Uint8Array(byteArray)
+  const name = path.split(/[\\/]/).pop() || 'workbook.xlsx'
+  const wb = await readWorkbookFile(new File([bytes], name))
+  return { path, wb, bytes: bytes.buffer }
+}
+
+/** Desktop app: read + parse a workbook from a known path (reopen fresh). */
+export async function readWorkbookFromPath(path: string): Promise<ImportedWorkbook | null> {
+  const byteArray = (await invoke('read_file', { path })) as number[]
+  const name = path.split(/[\\/]/).pop() || 'workbook.xlsx'
+  return readWorkbookFile(new File([new Uint8Array(byteArray)], name))
+}
+
 /**
  * Hand a generated file to the user. On a Capacitor native app (web views can't
  * download `blob:` URLs) we write it to a user-accessible folder and return the
- * location so the caller can confirm it and offer a Share button. In a browser
- * we trigger a normal download and return null.
+ * location so the caller can confirm it and offer a Share button. On the Tauri
+ * desktop app we open the native Save dialog (a browser download would silently
+ * drop the file into ~/Downloads). In a plain browser we download and return null.
  */
 async function deliverFile(blob: Blob, filename: string): Promise<NativeSaveResult | null> {
   if (isNativePlatform()) {
     return await saveFileNative(blob, filename)
+  }
+  if (isTauri()) {
+    const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()))
+    await invoke('save_workbook_as', { defaultName: filename, bytes })
+    return null
   }
   downloadBlob(blob, filename)
   return null
@@ -642,6 +689,8 @@ export async function saveToHandle(
 export interface SaveAsResult {
   handle: FileSystemFileHandle | null
   name: string
+  /** On the desktop app, the full path written (so Cmd+S can save in place). */
+  path?: string
   /** On a native app, where the file was written (so the UI can confirm/share it). */
   saved?: NativeSaveResult
 }
@@ -683,25 +732,16 @@ export async function saveWorkbookAs(
   // dialog would appear.)
   const native = isNativePlatform()
 
-  // Tauri desktop: native save dialog + write. Falls through to the browser
-  // paths if the command isn't present (e.g. an older app build).
-  const internals = (
-    window as unknown as {
-      __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> }
-    }
-  ).__TAURI_INTERNALS__
-  if (!native && internals && typeof internals.invoke === 'function') {
-    try {
-      const buf = await workbookBuffer(hf, sheets, format, charts)
-      const path = (await internals.invoke('save_workbook_as', {
-        defaultName: suggested,
-        bytes: Array.from(new Uint8Array(buf)),
-      })) as string | null
-      if (!path) return undefined // user cancelled the dialog
-      return { handle: null, name: basename(path) }
-    } catch {
-      // Command unavailable — fall back to the browser paths below.
-    }
+  // Tauri desktop: native save dialog + write, returning the chosen path so
+  // Cmd+S can later save in place.
+  if (!native && isTauri()) {
+    const buf = await workbookBuffer(hf, sheets, format, charts)
+    const path = (await invoke('save_workbook_as', {
+      defaultName: suggested,
+      bytes: Array.from(new Uint8Array(buf)),
+    })) as string | null
+    if (!path) return undefined // user cancelled the dialog
+    return { handle: null, name: basename(path), path }
   }
 
   // Chromium: File System Access picker (returns a reusable writable handle).

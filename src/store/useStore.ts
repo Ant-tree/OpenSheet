@@ -54,6 +54,9 @@ interface Snapshot {
 /** Copied block, kept in-module so pasting can restore formats too. */
 let clipboard: { rows: string[][]; formats: (CellFormat | undefined)[][] } | null = null
 
+/** localStorage key for the last opened/saved desktop (Tauri) file path. */
+const FILE_PATH_KEY = 'opensheet.filePath'
+
 // The grid virtualizes rows, so a large row cap costs nothing until scrolled to.
 export const MAX_ROWS = 5000
 export const MAX_COLS = 78 // A .. BZ
@@ -75,6 +78,9 @@ interface StoreState {
   fileName: string
   /** Writable handle to the opened file (File System Access API), when available. */
   fileHandle: FileSystemFileHandle | null
+  /** Last opened/saved file path on the desktop (Tauri) app, for in-place Cmd+S
+   *  and reopening the file fresh on next launch. */
+  filePath: string | null
   /** Inserted charts, keyed by sheet id. Kept out of undo history. */
   charts: Record<number, ChartSpec[]>
   /** Bumped on every mutation to trigger re-renders. */
@@ -152,6 +158,8 @@ interface StoreState {
   fillRight: () => void
 
   setFileHandle: (handle: FileSystemFileHandle | null) => void
+  /** Remember (and persist) the desktop file path for in-place save + reopen. */
+  setFilePath: (path: string | null) => void
 
   serializeState: () => SerializedDoc
   restoreState: (data: SerializedDoc) => void
@@ -220,6 +228,7 @@ export const useStore = create<StoreState>((set, get) => {
     columnFilters: {},
     fileName: t('defaultFileName', detectLang()),
     fileHandle: null,
+    filePath: typeof localStorage !== 'undefined' ? localStorage.getItem(FILE_PATH_KEY) : null,
     charts: {},
     rev: 0,
     past: [],
@@ -615,6 +624,14 @@ export const useStore = create<StoreState>((set, get) => {
 
     setFileHandle(handle) {
       set({ fileHandle: handle })
+    },
+
+    setFilePath(path) {
+      if (typeof localStorage !== 'undefined') {
+        if (path) localStorage.setItem(FILE_PATH_KEY, path)
+        else localStorage.removeItem(FILE_PATH_KEY)
+      }
+      set({ filePath: path })
     },
 
     serializeState() {

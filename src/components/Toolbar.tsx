@@ -6,6 +6,8 @@ import {
   readWorkbookFile,
   exportWorkbook,
   pickAndReadWorkbook,
+  openWorkbookTauri,
+  isTauri,
   saveToHandle,
   saveWorkbookAs,
   saveWorkbookViaSaf,
@@ -166,6 +168,7 @@ export default function Toolbar({
   const loadWorkbook = useStore((s) => s.loadWorkbook)
   const newWorkbook = useStore((s) => s.newWorkbook)
   const setFileHandle = useStore((s) => s.setFileHandle)
+  const setFilePath = useStore((s) => s.setFilePath)
   const getFormat = useStore((s) => s.getFormat)
   const selection = useStore((s) => s.selection)
   useStore((s) => s.rev) // subscribe so active-state buttons re-render
@@ -200,12 +203,28 @@ export default function Toolbar({
   // Open: use the File System Access picker when available (so we can save back
   // in place), otherwise fall back to a plain file input (download-only).
   const openFile = async () => {
+    if (isTauri()) {
+      // Desktop app: native Open dialog by path, so the file can be reopened
+      // fresh on the next launch (picking up edits from another editor).
+      try {
+        const res = await openWorkbookTauri()
+        if (!res) return
+        loadWorkbook(res.wb.sheets, res.wb.fileName)
+        setFileHandle(null)
+        setFilePath(res.path)
+        addRecentFile(res.wb.fileName, res.bytes)
+      } catch (err) {
+        alert(t('readFail') + (err as Error).message)
+      }
+      return
+    }
     if (CAN_SAVE_IN_PLACE) {
       try {
         const result = await pickAndReadWorkbook()
         if (!result) return
         loadWorkbook(result.wb.sheets, result.wb.fileName)
         setFileHandle(result.handle)
+        setFilePath(null)
         addRecentFile(result.wb.fileName, result.bytes)
       } catch (err) {
         alert(t('readFail') + (err as Error).message)
@@ -222,6 +241,7 @@ export default function Toolbar({
       const bytes = await file.arrayBuffer()
       const wb = await readWorkbookFile(file)
       loadWorkbook(wb.sheets, wb.fileName)
+      setFilePath(null)
       addRecentFile(wb.fileName, bytes)
     } catch (err) {
       alert(t('readFail') + (err as Error).message)
@@ -236,6 +256,7 @@ export default function Toolbar({
       const wb = await readWorkbookFile(file)
       loadWorkbook(wb.sheets, wb.fileName)
       setFileHandle(null)
+      setFilePath(null)
       addRecentFile(f.name, f.bytes) // bump recency
     } catch (err) {
       alert(t('readFail') + (err as Error).message)
@@ -296,6 +317,7 @@ export default function Toolbar({
       const res = await saveWorkbookAs(hf, sheets, fileName, 'xlsx', charts, promptFileName)
       if (!res) return // user cancelled
       useStore.setState({ fileName: res.name, fileHandle: res.handle })
+      setFilePath(res.path ?? null) // desktop: remember the path for in-place Cmd+S
       if (res.saved) setSavedModal(res.saved)
     } catch (err) {
       alert(t('saveFail') + (err as Error).message)
@@ -303,7 +325,10 @@ export default function Toolbar({
   }
 
   const newFile = () => {
-    if (confirm(t('newFileConfirm'))) newWorkbook()
+    if (confirm(t('newFileConfirm'))) {
+      newWorkbook()
+      setFilePath(null)
+    }
   }
 
   return (

@@ -1,3 +1,4 @@
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import { t, useLangStore } from '../i18n'
 import { showToast } from './toast'
 
@@ -13,16 +14,15 @@ import { showToast } from './toast'
  */
 export function printPage(): void {
   const w = window as unknown as {
-    __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> }
     Capacitor?: {
       isNativePlatform?: () => boolean
       Plugins?: { Printer?: { print: (opts: { content?: string }) => Promise<unknown> } }
     }
   }
 
-  // Tauri desktop: native print command.
-  if (w.__TAURI_INTERNALS__ && typeof w.__TAURI_INTERNALS__.invoke === 'function') {
-    w.__TAURI_INTERNALS__.invoke('print_page').catch(() => window.print())
+  // Tauri desktop: native print command (WKWebView has no JS window.print).
+  if (isTauri()) {
+    invoke('print_page').catch(() => window.print())
     return
   }
 
