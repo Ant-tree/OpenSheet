@@ -403,6 +403,24 @@ body {
   background: var(--hover);
 }
 
+/* Transient toast (e.g. "printing isn't available in the app") */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: min(90vw, 420px);
+  background: rgba(30, 30, 34, 0.96);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  z-index: 500;
+}
+
 /* ---------- Grid ---------- */
 .grid-scroll {
   flex: 1;
@@ -738,6 +756,25 @@ table.grid {
      bottom-right corner, so hide it to avoid two overlapping controls. */
   .fill-handle {
     display: none;
+  }
+
+  /* Find/replace, conditional-format and dropdown panels are one flex row of
+     fixed-width fields on desktop; on narrow screens let them wrap and fill the
+     width instead of overflowing off both edges. */
+  .find-panel {
+    align-items: stretch;
+  }
+  .find-row {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .find-row .find-input {
+    width: auto !important; /* override the desktop inline widths */
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+  .find-row .find-count {
+    min-width: 0;
   }
 
   /* Keep the status bar clear of the home indicator, and let it scroll

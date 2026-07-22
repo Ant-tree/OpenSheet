@@ -136,10 +136,12 @@ const BORDER_LABEL_KEYS = {
 } as const
 
 export default function Toolbar({
+  onOpenFind,
   onOpenCondFormat,
   onOpenChart,
   onOpenValidation,
 }: {
+  onOpenFind: () => void
   onOpenCondFormat: () => void
   onOpenChart: () => void
   onOpenValidation: () => void
@@ -522,6 +524,13 @@ export default function Toolbar({
         </button>
         <button className="tbtn" title={t('unmerge')} onClick={unmergeSelection}>
           <Icon name="unmerge" />
+        </button>
+      </div>
+
+      <div className="group">
+        <button className="tbtn" title={t('findReplace')} onClick={onOpenFind}>
+          <Icon name="search" />
+          {t('find')}
         </button>
       </div>
 

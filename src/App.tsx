@@ -8,6 +8,7 @@ import FindReplace from './components/FindReplace'
 import CondFormatPanel from './components/CondFormatPanel'
 import ChartPanel from './components/ChartPanel'
 import DataValidationPanel from './components/DataValidationPanel'
+import Toast from './components/Toast'
 import { useStore } from './store/useStore'
 import type { SerializedDoc } from './store/useStore'
 import { loadDraft, saveDraft } from './lib/recentFiles'
@@ -210,6 +211,7 @@ export default function App() {
   return (
     <div className="app">
       <Toolbar
+        onOpenFind={() => setFindMode((m) => (m ? null : 'replace'))}
         onOpenCondFormat={() => setShowCond((v) => !v)}
         onOpenChart={() => setShowChart(true)}
         onOpenValidation={() => setShowValidation((v) => !v)}
@@ -287,6 +289,7 @@ export default function App() {
           <option value="ko">한국어</option>
         </select>
       </div>
+      <Toast />
     </div>
   )
 }
