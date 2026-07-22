@@ -44,6 +44,36 @@ async fn save_workbook_to_path(path: String, bytes: Vec<u8>) -> Result<(), Strin
   std::fs::write(&path, &bytes).map_err(|e| e.to_string())
 }
 
+/// Show a native "Open" dialog and return the chosen file's path + bytes, or
+/// `None` if cancelled. Web views have no `showOpenFilePicker`, and reading by
+/// path lets us reopen the file fresh on the next launch.
+#[tauri::command]
+async fn open_workbook(app: tauri::AppHandle) -> Result<Option<(String, Vec<u8>)>, String> {
+  let (tx, rx) = std::sync::mpsc::channel();
+  app
+    .dialog()
+    .file()
+    .add_filter("Spreadsheet", &["xlsx", "csv"])
+    .pick_file(move |path| {
+      let _ = tx.send(path);
+    });
+  match rx.recv().map_err(|e| e.to_string())? {
+    Some(file_path) => {
+      let path = file_path.to_string();
+      let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+      Ok(Some((path, bytes)))
+    }
+    None => Ok(None),
+  }
+}
+
+/// Read a file's bytes by path (used to reopen the last file fresh on launch,
+/// so edits made in another editor are picked up).
+#[tauri::command]
+async fn read_file(path: String) -> Result<Vec<u8>, String> {
+  std::fs::read(&path).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -61,7 +91,9 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       print_page,
       save_workbook_as,
-      save_workbook_to_path
+      save_workbook_to_path,
+      open_workbook,
+      read_file
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

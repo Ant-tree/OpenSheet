@@ -18,6 +18,7 @@ import {
   saveToHandle,
   saveWorkbookAs,
   saveWorkbookToPath,
+  readWorkbookFromPath,
   isTauri,
 } from './lib/fileIO'
 import { t as translate, useLangStore, useT } from './i18n'
@@ -185,11 +186,32 @@ export default function App() {
 
   // Autosave to IndexedDB and recover the last session on load.
   useEffect(() => {
-    loadDraft<SerializedDoc>()
-      .then((d) => {
-        if (d) useStore.getState().restoreState(d)
-      })
-      .catch(() => {})
+    const restoreDraft = () =>
+      loadDraft<SerializedDoc>()
+        .then((d) => {
+          if (d) useStore.getState().restoreState(d)
+        })
+        .catch(() => {})
+
+    // Desktop app with a remembered file: reopen it FRESH from disk so edits
+    // made in another editor are picked up (instead of the stale autosaved
+    // draft). Falls back to the draft if the file is gone or unreadable.
+    const startPath = useStore.getState().filePath
+    if (isTauri() && startPath) {
+      readWorkbookFromPath(startPath)
+        .then((wb) => {
+          if (wb) {
+            const s = useStore.getState()
+            s.loadWorkbook(wb.sheets, wb.fileName)
+            s.setFilePath(startPath)
+          } else {
+            void restoreDraft()
+          }
+        })
+        .catch(() => void restoreDraft())
+    } else {
+      void restoreDraft()
+    }
     let timer: number
     let lastRev = useStore.getState().rev
     const unsub = useStore.subscribe((state) => {

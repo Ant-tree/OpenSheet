@@ -6,6 +6,8 @@ import {
   readWorkbookFile,
   exportWorkbook,
   pickAndReadWorkbook,
+  openWorkbookTauri,
+  isTauri,
   saveToHandle,
   saveWorkbookAs,
   saveWorkbookViaSaf,
@@ -201,6 +203,21 @@ export default function Toolbar({
   // Open: use the File System Access picker when available (so we can save back
   // in place), otherwise fall back to a plain file input (download-only).
   const openFile = async () => {
+    if (isTauri()) {
+      // Desktop app: native Open dialog by path, so we can reopen it fresh on
+      // the next launch (picking up edits made in another editor).
+      try {
+        const res = await openWorkbookTauri()
+        if (!res) return
+        loadWorkbook(res.wb.sheets, res.wb.fileName)
+        setFileHandle(null)
+        setFilePath(res.path)
+        addRecentFile(res.wb.fileName, res.bytes)
+      } catch (err) {
+        alert(t('readFail') + (err as Error).message)
+      }
+      return
+    }
     if (CAN_SAVE_IN_PLACE) {
       try {
         const result = await pickAndReadWorkbook()

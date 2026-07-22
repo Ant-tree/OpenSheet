@@ -499,6 +499,33 @@ export function isTauri(): boolean {
   return tauriInvoke() !== null
 }
 
+/** Desktop app: show the native Open dialog, returning the parsed workbook plus
+ *  its path (for in-place save + fresh reopen) and raw bytes (for recents). */
+export async function openWorkbookTauri(): Promise<{
+  path: string
+  wb: ImportedWorkbook
+  bytes: ArrayBuffer
+} | null> {
+  const invoke = tauriInvoke()
+  if (!invoke) return null
+  const res = (await invoke('open_workbook')) as [string, number[]] | null
+  if (!res) return null
+  const [path, byteArray] = res
+  const bytes = new Uint8Array(byteArray)
+  const name = path.split(/[\\/]/).pop() || 'workbook.xlsx'
+  const wb = await readWorkbookFile(new File([bytes], name))
+  return { path, wb, bytes: bytes.buffer }
+}
+
+/** Desktop app: read + parse a workbook from a known path (reopen fresh). */
+export async function readWorkbookFromPath(path: string): Promise<ImportedWorkbook | null> {
+  const invoke = tauriInvoke()
+  if (!invoke) return null
+  const byteArray = (await invoke('read_file', { path })) as number[]
+  const name = path.split(/[\\/]/).pop() || 'workbook.xlsx'
+  return readWorkbookFile(new File([new Uint8Array(byteArray)], name))
+}
+
 /** Save the workbook straight to a known desktop path (Cmd+S, save in place). */
 export async function saveWorkbookToPath(
   hf: HyperFormula,
