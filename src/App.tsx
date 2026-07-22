@@ -10,8 +10,7 @@ import ChartPanel from './components/ChartPanel'
 import DataValidationPanel from './components/DataValidationPanel'
 import Toast from './components/Toast'
 import { useStore } from './store/useStore'
-import type { SerializedDoc } from './store/useStore'
-import { loadDraft, saveDraft, loadHandle, saveHandle } from './lib/recentFiles'
+import { saveDraft, saveHandle } from './lib/recentFiles'
 import { iterateSelection } from './lib/utils'
 import {
   exportWorkbook,
@@ -199,22 +198,10 @@ export default function App() {
 
   // Autosave to IndexedDB and recover the last session on load.
   useEffect(() => {
-    const restoreDraft = () =>
-      loadDraft<SerializedDoc>()
-        .then(async (d) => {
-          if (!d) return
-          useStore.getState().restoreState(d)
-          // Chromium: restore the file's write handle too, so "Save" writes back
-          // to the file after a reload (with a one-time permission prompt on the
-          // first save) instead of only working after re-opening it.
-          const handle = await loadHandle()
-          if (handle) useStore.getState().setFileHandle(handle)
-        })
-        .catch(() => {})
-
-    // Desktop app with a remembered file: reopen it FRESH from disk so edits
-    // made in another editor are picked up (instead of the stale autosaved
-    // draft). Falls back to the draft if the file is gone or unreadable.
+    // The desktop app reopens the last file FRESH from disk (so external edits
+    // show up). Everywhere else we start blank and let the user open the file
+    // directly — we no longer auto-restore the autosaved draft, which could show
+    // a stale copy of a file changed elsewhere.
     const startPath = useStore.getState().filePath
     if (isTauri() && startPath) {
       readWorkbookFromPath(startPath)
@@ -223,14 +210,12 @@ export default function App() {
             const s = useStore.getState()
             s.loadWorkbook(wb.sheets, wb.fileName)
             s.setFilePath(startPath)
-          } else {
-            void restoreDraft()
           }
         })
-        .catch(() => void restoreDraft())
-    } else {
-      void restoreDraft()
+        .catch(() => {})
     }
+
+    // Keep autosaving a recovery draft in the background (no longer auto-loaded).
     let timer: number
     let lastRev = useStore.getState().rev
     const unsub = useStore.subscribe((state) => {
