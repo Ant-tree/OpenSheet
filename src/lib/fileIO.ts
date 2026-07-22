@@ -644,6 +644,12 @@ export async function saveWorkbookAs(
   const suggested = `${base}.${format}`
   const basename = (p: string) => p.split(/[\\/]/).pop() || suggested
 
+  // On a Capacitor native app (iOS/Android) always use the in-app name dialog +
+  // folder save below — never the desktop dialogs. (Some Android WebViews expose
+  // a broken showSaveFilePicker; taking that branch would abort silently and no
+  // dialog would appear.)
+  const native = isNativePlatform()
+
   // Tauri desktop: native save dialog + write. Falls through to the browser
   // paths if the command isn't present (e.g. an older app build).
   const internals = (
@@ -651,7 +657,7 @@ export async function saveWorkbookAs(
       __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> }
     }
   ).__TAURI_INTERNALS__
-  if (internals && typeof internals.invoke === 'function') {
+  if (!native && internals && typeof internals.invoke === 'function') {
     try {
       const buf = await workbookBuffer(hf, sheets, format, charts)
       const path = (await internals.invoke('save_workbook_as', {
@@ -671,7 +677,7 @@ export async function saveWorkbookAs(
       showSaveFilePicker?: (opts: unknown) => Promise<FileSystemFileHandle>
     }
   ).showSaveFilePicker
-  if (typeof picker === 'function') {
+  if (!native && typeof picker === 'function') {
     let handle: FileSystemFileHandle
     try {
       handle = await picker({

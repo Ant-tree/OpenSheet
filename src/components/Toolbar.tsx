@@ -10,7 +10,7 @@ import {
   saveWorkbookAs,
   supportsFileSystemAccess,
 } from '../lib/fileIO'
-import { shareFileNative, type NativeSaveResult } from '../lib/nativeSave'
+import { isNativePlatform, shareFileNative, type NativeSaveResult } from '../lib/nativeSave'
 import { printPage } from '../lib/print'
 import {
   NUMBER_FORMAT_PRESETS,
@@ -257,11 +257,23 @@ export default function Toolbar({
   // in-place target (so later ⌘S saves there); elsewhere it downloads a copy.
   const saveAs = async () => {
     const { hf, sheets, fileName, charts } = useStore.getState()
+    const suggested = `${fileName.replace(/\.(xlsx|csv)$/i, '')}.xlsx`
     try {
+      // Native apps: drive the flow here so the in-app name modal always shows,
+      // independent of saveWorkbookAs's desktop-dialog branching.
+      if (isNativePlatform()) {
+        const chosen = await promptFileName(suggested)
+        if (chosen === null) return // cancelled
+        const name = chosen.trim() || suggested
+        const saved = await exportWorkbook(hf, sheets, name, 'xlsx', charts)
+        useStore.setState({ fileName: `${name.replace(/\.(xlsx|csv)$/i, '')}.xlsx` })
+        if (saved) setSavedModal(saved) // confirm location + offer share
+        return
+      }
       const res = await saveWorkbookAs(hf, sheets, fileName, 'xlsx', charts, promptFileName)
       if (!res) return // user cancelled
       useStore.setState({ fileName: res.name, fileHandle: res.handle })
-      if (res.saved) setSavedModal(res.saved) // native app: confirm location + share
+      if (res.saved) setSavedModal(res.saved)
     } catch (err) {
       alert(t('saveFail') + (err as Error).message)
     }
