@@ -11,7 +11,7 @@ import DataValidationPanel from './components/DataValidationPanel'
 import Toast from './components/Toast'
 import { useStore } from './store/useStore'
 import type { SerializedDoc } from './store/useStore'
-import { loadDraft, saveDraft } from './lib/recentFiles'
+import { loadDraft, saveDraft, loadHandle, saveHandle } from './lib/recentFiles'
 import { iterateSelection } from './lib/utils'
 import {
   exportWorkbook,
@@ -19,6 +19,7 @@ import {
   saveWorkbookAs,
   saveWorkbookToPath,
   readWorkbookFromPath,
+  supportsFileSystemAccess,
   isTauri,
 } from './lib/fileIO'
 import { t as translate, useLangStore, useT } from './i18n'
@@ -94,7 +95,23 @@ export default function App() {
               onErr(err as Error)
             }
           })()
+        } else if (supportsFileSystemAccess()) {
+          // Chromium web, no handle yet (e.g. after a draft/recent restore):
+          // prompt once with the Save-As picker, then remember the handle so
+          // later saves write in place.
+          void (async () => {
+            try {
+              const res = await saveWorkbookAs(store.hf, store.sheets, store.fileName, 'xlsx', store.charts)
+              if (res) {
+                useStore.setState({ fileName: res.name, fileHandle: res.handle })
+                saveHandle(res.handle)
+              }
+            } catch (err) {
+              onErr(err as Error)
+            }
+          })()
         } else {
+          // Safari/Firefox: no file-write API — download a copy.
           exportWorkbook(store.hf, store.sheets, store.fileName, 'xlsx', store.charts).catch(onErr)
         }
         return
@@ -184,8 +201,14 @@ export default function App() {
   useEffect(() => {
     const restoreDraft = () =>
       loadDraft<SerializedDoc>()
-        .then((d) => {
-          if (d) useStore.getState().restoreState(d)
+        .then(async (d) => {
+          if (!d) return
+          useStore.getState().restoreState(d)
+          // Chromium: restore the file's write handle too, so "Save" writes back
+          // to the file after a reload (with a one-time permission prompt on the
+          // first save) instead of only working after re-opening it.
+          const handle = await loadHandle()
+          if (handle) useStore.getState().setFileHandle(handle)
         })
         .catch(() => {})
 

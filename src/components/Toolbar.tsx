@@ -34,6 +34,7 @@ import {
   clearRecentFiles,
   listRecentFiles,
   relativeTime,
+  saveHandle,
   type RecentFile,
 } from '../lib/recentFiles'
 import { useLangStore, useT } from '../i18n'
@@ -224,6 +225,7 @@ export default function Toolbar({
         if (!result) return
         loadWorkbook(result.wb.sheets, result.wb.fileName)
         setFileHandle(result.handle)
+        saveHandle(result.handle) // persist so Save works after a reload
         setFilePath(null)
         addRecentFile(result.wb.fileName, result.bytes)
       } catch (err) {
@@ -241,6 +243,8 @@ export default function Toolbar({
       const bytes = await file.arrayBuffer()
       const wb = await readWorkbookFile(file)
       loadWorkbook(wb.sheets, wb.fileName)
+      setFileHandle(null)
+      saveHandle(null)
       setFilePath(null)
       addRecentFile(wb.fileName, bytes)
     } catch (err) {
@@ -256,6 +260,7 @@ export default function Toolbar({
       const wb = await readWorkbookFile(file)
       loadWorkbook(wb.sheets, wb.fileName)
       setFileHandle(null)
+      saveHandle(null)
       setFilePath(null)
       addRecentFile(f.name, f.bytes) // bump recency
     } catch (err) {
@@ -317,6 +322,7 @@ export default function Toolbar({
       const res = await saveWorkbookAs(hf, sheets, fileName, 'xlsx', charts, promptFileName)
       if (!res) return // user cancelled
       useStore.setState({ fileName: res.name, fileHandle: res.handle })
+      saveHandle(res.handle) // persist so Save works after a reload (Chromium)
       setFilePath(res.path ?? null) // desktop: remember the path for in-place Cmd+S
       if (res.saved) setSavedModal(res.saved)
     } catch (err) {
@@ -327,6 +333,8 @@ export default function Toolbar({
   const newFile = () => {
     if (confirm(t('newFileConfirm'))) {
       newWorkbook()
+      setFileHandle(null)
+      saveHandle(null)
       setFilePath(null)
     }
   }

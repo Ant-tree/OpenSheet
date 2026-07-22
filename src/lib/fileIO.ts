@@ -677,6 +677,22 @@ export async function saveToHandle(
   handle: FileSystemFileHandle,
   charts?: ChartsBySheet,
 ): Promise<void> {
+  // A handle restored from IndexedDB (across a reload) loses its write grant, so
+  // re-request it (a no-op if already granted). Needs a user gesture, which the
+  // Save action provides.
+  const perm = handle as unknown as {
+    queryPermission?: (o: { mode: 'readwrite' }) => Promise<PermissionState>
+    requestPermission?: (o: { mode: 'readwrite' }) => Promise<PermissionState>
+  }
+  if (perm.queryPermission) {
+    let state = await perm.queryPermission({ mode: 'readwrite' })
+    if (state !== 'granted' && perm.requestPermission) {
+      state = await perm.requestPermission({ mode: 'readwrite' })
+    }
+    if (state !== 'granted') {
+      throw new Error(t('savePermissionDenied', useLangStore.getState().lang))
+    }
+  }
   const format: 'xlsx' | 'csv' = handle.name.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx'
   const buf = await workbookBuffer(hf, sheets, format, charts)
   const writable = await handle.createWritable()

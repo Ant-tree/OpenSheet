@@ -54,6 +54,40 @@ export async function loadDraft<T = unknown>(): Promise<T | null> {
   }
 }
 
+// The File System Access handle for the currently-open file (Chromium). Handles
+// are structured-cloneable, so persisting it lets "Save" write back to the same
+// file after a reload (with a one-time permission re-prompt) instead of only
+// after re-opening via the picker.
+const HANDLE_KEY = 'fileHandle'
+
+export async function saveHandle(handle: FileSystemFileHandle | null): Promise<void> {
+  try {
+    const db = await openDB()
+    await new Promise<void>((resolve) => {
+      const t = db.transaction(KV, 'readwrite')
+      if (handle) t.objectStore(KV).put(handle, HANDLE_KEY)
+      else t.objectStore(KV).delete(HANDLE_KEY)
+      t.oncomplete = () => resolve()
+      t.onerror = () => resolve()
+    })
+  } catch {
+    /* storage unavailable — best-effort */
+  }
+}
+
+export async function loadHandle(): Promise<FileSystemFileHandle | null> {
+  try {
+    const db = await openDB()
+    return await new Promise<FileSystemFileHandle | null>((resolve) => {
+      const req = db.transaction(KV, 'readonly').objectStore(KV).get(HANDLE_KEY)
+      req.onsuccess = () => resolve((req.result as FileSystemFileHandle) ?? null)
+      req.onerror = () => resolve(null)
+    })
+  } catch {
+    return null
+  }
+}
+
 export async function clearDraft(): Promise<void> {
   try {
     const db = await openDB()
