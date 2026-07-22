@@ -8,9 +8,16 @@ import {
   pickAndReadWorkbook,
   saveToHandle,
   saveWorkbookAs,
+  saveWorkbookViaSaf,
   supportsFileSystemAccess,
 } from '../lib/fileIO'
-import { isNativePlatform, shareFileNative, type NativeSaveResult } from '../lib/nativeSave'
+import {
+  isNativePlatform,
+  nativePlatform,
+  shareFileNative,
+  type NativeSaveResult,
+} from '../lib/nativeSave'
+import { showToast } from '../lib/toast'
 import { printPage } from '../lib/print'
 import {
   NUMBER_FORMAT_PRESETS,
@@ -245,9 +252,21 @@ export default function Toolbar({
     }
   }
 
+  // Android: try the system "Save As" dialog (SAF) so the user picks the folder.
+  // Returns true when it handled the save (saved or cancelled); false to fall back.
+  const trySafSave = async (format: 'xlsx' | 'csv', name: string): Promise<boolean> => {
+    if (nativePlatform() !== 'android') return false
+    const { hf, sheets, charts } = useStore.getState()
+    const outcome = await saveWorkbookViaSaf(hf, sheets, name, format, charts)
+    if (outcome === 'unavailable') return false
+    if (outcome === 'saved') showToast(t('savedToast'))
+    return true // saved or cancelled — don't fall through
+  }
+
   const save = async (format: 'xlsx' | 'csv') => {
     const { hf, sheets, fileName, charts } = useStore.getState()
     try {
+      if (await trySafSave(format, fileName)) return
       const saved = await exportWorkbook(hf, sheets, fileName, format, charts)
       if (saved) setSavedModal(saved) // native app: confirm location + offer share
     } catch (err) {
@@ -261,6 +280,8 @@ export default function Toolbar({
     const { hf, sheets, fileName, charts } = useStore.getState()
     const suggested = `${fileName.replace(/\.(xlsx|csv)$/i, '')}.xlsx`
     try {
+      // Android: the SAF dialog handles naming + location itself.
+      if (await trySafSave('xlsx', fileName)) return
       // Native apps: drive the flow here so the in-app name modal always shows,
       // independent of saveWorkbookAs's desktop-dialog branching.
       if (isNativePlatform()) {

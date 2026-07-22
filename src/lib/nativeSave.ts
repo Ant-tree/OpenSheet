@@ -1,9 +1,41 @@
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 // Static imports (not `await import(...)`): dynamic-import chunks fail to load in
 // the Capacitor WebView ("Failed to fetch dynamically imported module"), so the
 // plugins are bundled with the app instead of fetched on demand at save time.
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
+
+/** Custom Android plugin: save bytes to a user-picked location via the Storage
+ *  Access Framework (see android/.../SafSaverPlugin.java). */
+interface SafSaverPlugin {
+  saveDocument(options: {
+    data: string
+    filename: string
+    mimeType: string
+  }): Promise<{ saved: boolean; uri?: string }>
+}
+const SafSaver = registerPlugin<SafSaverPlugin>('SafSaver')
+
+/**
+ * Show the Android "Save As" system dialog (SAF) and write `base64` to the
+ * chosen file. Returns 'cancelled' if the user dismissed it, or 'unavailable'
+ * when the native plugin isn't present (older build / non-Android), so the
+ * caller can fall back.
+ */
+export async function safSaveDocument(
+  base64: string,
+  filename: string,
+  mimeType: string,
+): Promise<'saved' | 'cancelled' | 'unavailable'> {
+  if (nativePlatform() !== 'android') return 'unavailable'
+  try {
+    const res = await SafSaver.saveDocument({ data: base64, filename, mimeType })
+    return res.saved ? 'saved' : 'cancelled'
+  } catch {
+    // Plugin not registered (app not rebuilt) — let the caller fall back.
+    return 'unavailable'
+  }
+}
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {

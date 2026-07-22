@@ -15,7 +15,7 @@ import { t, useLangStore } from '../i18n'
 import { strongerBorder } from './format'
 import { opFromExcel, opToExcel } from './condFormat'
 import { chartToSvgString, svgToPngDataUrl } from './chartRender'
-import { isNativePlatform, saveFileNative, type NativeSaveResult } from './nativeSave'
+import { isNativePlatform, saveFileNative, safSaveDocument, type NativeSaveResult } from './nativeSave'
 
 /** sheet id -> charts inserted on it. */
 export type ChartsBySheet = Record<number, ChartSpec[]>
@@ -496,6 +496,39 @@ async function deliverFile(blob: Blob, filename: string): Promise<NativeSaveResu
   }
   downloadBlob(blob, filename)
   return null
+}
+
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf)
+  let binary = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK) as unknown as number[])
+  }
+  return btoa(binary)
+}
+
+/**
+ * Android only: save the workbook through the system "Save As" dialog (SAF), so
+ * the user names the file and picks the folder (Downloads, etc.). Returns
+ * 'unavailable' when the native plugin isn't present, so the caller can fall
+ * back to writing into app storage.
+ */
+export async function saveWorkbookViaSaf(
+  hf: HyperFormula,
+  sheets: SheetMeta[],
+  fileName: string,
+  format: 'xlsx' | 'csv',
+  charts?: ChartsBySheet,
+): Promise<'saved' | 'cancelled' | 'unavailable'> {
+  const base = fileName.replace(/\.(xlsx|csv)$/i, '')
+  const filename = `${base}.${format}`
+  const mimeType =
+    format === 'csv'
+      ? 'text/csv'
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  const buf = await workbookBuffer(hf, sheets, format, charts)
+  return safSaveDocument(arrayBufferToBase64(buf), filename, mimeType)
 }
 
 /** Serialize the current state into an xlsx/csv byte buffer. */
