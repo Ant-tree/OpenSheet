@@ -39,29 +39,57 @@ export function nativePlatform(): string {
 
 /**
  * Write a file to a user-accessible folder on a Capacitor native app
- * (iOS/Android). We can't trigger a `blob:` download in a web view, so the
- * bytes are written straight to disk and the location is returned (the caller
- * confirms it and offers a Share button). Documents is preferred (visible in
- * the iOS Files app when the Info.plist keys are set); we fall back to
- * app-specific storage if it isn't writable.
+ * (iOS/Android). We can't trigger a `blob:` download in a web view, so the bytes
+ * are written straight to disk and the location is returned (the caller confirms
+ * it and offers a Share button).
+ *
+ * Android: try the public Downloads then Documents folder (needs the storage
+ * permission, requested here). That lands in the shared, user-browsable storage
+ * on Android ≤10; on 11+ those writes are restricted, so we fall back to
+ * app-specific storage (still saved, and shareable out).
+ * iOS: the app Documents folder (visible in the Files app via the Info.plist
+ * keys).
  */
 export async function saveFileNative(blob: Blob, filename: string): Promise<NativeSaveResult> {
   const data = await blobToBase64(blob)
-  const candidates: [string, (typeof Directory)[keyof typeof Directory]][] = [
-    ['Documents', Directory.Documents],
-    ['External', Directory.External],
-    ['Data', Directory.Data],
+  type Target = { label: string; directory: Directory; path: string }
+
+  const appTargets: Target[] = [
+    { label: 'App storage', directory: Directory.External, path: filename },
+    { label: 'App storage', directory: Directory.Data, path: filename },
   ]
+
+  let targets: Target[]
+  if (nativePlatform() === 'android') {
+    let granted = false
+    try {
+      let perm = await Filesystem.checkPermissions()
+      if (perm.publicStorage !== 'granted') perm = await Filesystem.requestPermissions()
+      granted = perm.publicStorage === 'granted'
+    } catch {
+      /* older API without a permission model — just try the writes */
+    }
+    const publicTargets: Target[] = granted
+      ? [
+          { label: 'Download', directory: Directory.ExternalStorage, path: `Download/${filename}` },
+          { label: 'Documents', directory: Directory.Documents, path: filename },
+        ]
+      : []
+    targets = [...publicTargets, ...appTargets]
+  } else {
+    targets = [{ label: 'Documents', directory: Directory.Documents, path: filename }, ...appTargets]
+  }
+
   let lastErr: unknown
-  for (const [name, dir] of candidates) {
+  for (const t of targets) {
     try {
       const { uri } = await Filesystem.writeFile({
-        path: filename,
+        path: t.path,
         data,
-        directory: dir,
+        directory: t.directory,
         recursive: true,
       })
-      return { uri, directory: name, filename }
+      return { uri, directory: t.label, filename }
     } catch (err) {
       lastErr = err
     }
