@@ -163,6 +163,22 @@ export default function Toolbar({
 
   const active = getFormat(selection.focus.row, selection.focus.col)
 
+  // In-app "Save As" name dialog. Used instead of window.prompt so naming works
+  // even where the WebView has no JS prompt dialog (notably Android WebView).
+  const [nameModal, setNameModal] = useState<{ suggested: string } | null>(null)
+  const nameResolver = useRef<((v: string | null) => void) | null>(null)
+  const promptFileName = (suggested: string) =>
+    new Promise<string | null>((resolve) => {
+      nameResolver.current = resolve
+      setNameModal({ suggested })
+    })
+  const resolveNameModal = (value: string | null) => {
+    setNameModal(null)
+    const r = nameResolver.current
+    nameResolver.current = null
+    r?.(value)
+  }
+
   const toggle = (kProp: 'bold' | 'italic' | 'underline') =>
     applyFormat({ [kProp]: !active?.[kProp] })
 
@@ -237,7 +253,7 @@ export default function Toolbar({
   const saveAs = async () => {
     const { hf, sheets, fileName, charts } = useStore.getState()
     try {
-      const res = await saveWorkbookAs(hf, sheets, fileName, 'xlsx', charts)
+      const res = await saveWorkbookAs(hf, sheets, fileName, 'xlsx', charts, promptFileName)
       if (!res) return // user cancelled
       useStore.setState({ fileName: res.name, fileHandle: res.handle })
     } catch (err) {
@@ -550,6 +566,77 @@ export default function Toolbar({
           </button>
         </Dropdown>
       </div>
+      {nameModal && (
+        <SaveAsDialog
+          suggested={nameModal.suggested}
+          label={t('saveAsPrompt')}
+          okLabel={t('saveAsOk')}
+          cancelLabel={t('saveAsCancel')}
+          onConfirm={(v) => resolveNameModal(v)}
+          onCancel={() => resolveNameModal(null)}
+        />
+      )}
     </div>
+  )
+}
+
+/** Modal asking for a file name (in-app, so it works without a WebView JS prompt). */
+function SaveAsDialog({
+  suggested,
+  label,
+  okLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+}: {
+  suggested: string
+  label: string
+  okLabel: string
+  cancelLabel: string
+  onConfirm: (name: string) => void
+  onCancel: () => void
+}) {
+  const [val, setVal] = useState(suggested)
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.focus()
+    // Preselect the base name (before the extension) for a quick rename.
+    const dot = el.value.lastIndexOf('.')
+    el.setSelectionRange(0, dot > 0 ? dot : el.value.length)
+  }, [])
+  const confirm = () => onConfirm(val)
+  return createPortal(
+    <div className="saveas-overlay" onMouseDown={onCancel}>
+      <div className="saveas-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <label className="saveas-label">{label}</label>
+        <input
+          ref={inputRef}
+          className="saveas-input"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation()
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              confirm()
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              onCancel()
+            }
+          }}
+        />
+        <div className="saveas-actions">
+          <button className="saveas-btn" onClick={onCancel}>
+            {cancelLabel}
+          </button>
+          <button className="saveas-btn primary" onClick={confirm}>
+            {okLabel}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }

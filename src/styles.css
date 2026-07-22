@@ -870,6 +870,69 @@ table.grid {
   font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
 }
 
+/* Save As name dialog */
+.saveas-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 16px;
+  padding-top: calc(16px + env(safe-area-inset-top));
+}
+.saveas-modal {
+  background: var(--menu-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  padding: 16px;
+  width: min(360px, 94vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.saveas-label {
+  font-size: 13px;
+  color: var(--header-fg);
+}
+.saveas-input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 10px;
+  font-size: 16px; /* 16px avoids iOS focus auto-zoom */
+  font-family: var(--font);
+  color: var(--fg);
+  background: var(--cell-bg);
+  outline: none;
+}
+.saveas-input:focus {
+  border-color: var(--accent);
+}
+.saveas-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.saveas-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--menu-bg);
+  color: var(--fg);
+  font-size: 14px;
+  cursor: pointer;
+}
+.saveas-btn:hover {
+  background: var(--hover);
+}
+.saveas-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* Chart modal */
 .chart-overlay {
   position: fixed;

@@ -635,6 +635,14 @@ export async function saveWorkbookAs(
   fileName: string,
   format: 'xlsx' | 'csv',
   charts?: ChartsBySheet,
+  /**
+   * Ask the user for a file name (used on native apps and browsers with no OS
+   * "save as" dialog). Resolve with the chosen name, or null if cancelled.
+   * Defaults to window.prompt, but the UI passes an in-app modal so it also
+   * works where the WebView has no JS prompt dialog (e.g. Android WebView).
+   */
+  promptName: (suggested: string) => Promise<string | null> = (suggested) =>
+    Promise.resolve(window.prompt(t('saveAsPrompt', useLangStore.getState().lang), suggested)),
 ): Promise<SaveAsResult | undefined> {
   const base = fileName.replace(/\.(xlsx|csv)$/i, '')
   const suggested = `${base}.${format}`
@@ -693,11 +701,9 @@ export async function saveWorkbookAs(
 
   // Everything else — Capacitor native apps (iOS/Android) and browsers without a
   // native "save as" dialog (Safari/Firefox/mobile): ask for a name, then write.
-  // On native the OS share sheet can't rename the file, so this prompt is the
-  // only chance to name it; exportWorkbook then routes to the share sheet. The
-  // app already relies on window.prompt on native (sheet rename uses it too).
-  const lang = useLangStore.getState().lang
-  const chosen = window.prompt(t('saveAsPrompt', lang), suggested)
+  // On native the OS share sheet can't rename the file, so this is the only
+  // chance to name it; exportWorkbook then routes to the share sheet.
+  const chosen = await promptName(suggested)
   if (chosen === null) return undefined
   const trimmed = chosen.trim() || suggested
   await exportWorkbook(hf, sheets, trimmed, format, charts)
