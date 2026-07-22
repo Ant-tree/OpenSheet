@@ -10,7 +10,18 @@ export interface RecentFile {
   id: string
   name: string
   savedAt: number
+  /** A snapshot of the file's bytes — fallback used only if a fresh read fails. */
   bytes: ArrayBuffer
+  /** Desktop (Tauri): absolute path, so reopening re-reads the current file. */
+  path?: string
+  /** Android (SAF): a persisted content URI, so reopening re-reads the file. */
+  uri?: string
+}
+
+/** A reference that lets a recent file be re-read fresh from disk on reopen. */
+export interface RecentRef {
+  path?: string
+  uri?: string
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -26,74 +37,16 @@ function openDB(): Promise<IDBDatabase> {
   })
 }
 
-/** Persist the working document so a reload can recover it. Best-effort. */
-export async function saveDraft(data: unknown): Promise<void> {
-  try {
-    const db = await openDB()
-    await new Promise<void>((resolve, reject) => {
-      const t = db.transaction(KV, 'readwrite')
-      t.objectStore(KV).put(data, 'draft')
-      t.oncomplete = () => resolve()
-      t.onerror = () => reject(t.error)
-    })
-  } catch {
-    /* storage unavailable — never block editing */
-  }
-}
-
-export async function loadDraft<T = unknown>(): Promise<T | null> {
-  try {
-    const db = await openDB()
-    return await new Promise<T | null>((resolve) => {
-      const req = db.transaction(KV, 'readonly').objectStore(KV).get('draft')
-      req.onsuccess = () => resolve((req.result as T) ?? null)
-      req.onerror = () => resolve(null)
-    })
-  } catch {
-    return null
-  }
-}
-
-// The File System Access handle for the currently-open file (Chromium). Handles
-// are structured-cloneable, so persisting it lets "Save" write back to the same
-// file after a reload (with a one-time permission re-prompt) instead of only
-// after re-opening via the picker.
-const HANDLE_KEY = 'fileHandle'
-
-export async function saveHandle(handle: FileSystemFileHandle | null): Promise<void> {
-  try {
-    const db = await openDB()
-    await new Promise<void>((resolve) => {
-      const t = db.transaction(KV, 'readwrite')
-      if (handle) t.objectStore(KV).put(handle, HANDLE_KEY)
-      else t.objectStore(KV).delete(HANDLE_KEY)
-      t.oncomplete = () => resolve()
-      t.onerror = () => resolve()
-    })
-  } catch {
-    /* storage unavailable — best-effort */
-  }
-}
-
-export async function loadHandle(): Promise<FileSystemFileHandle | null> {
-  try {
-    const db = await openDB()
-    return await new Promise<FileSystemFileHandle | null>((resolve) => {
-      const req = db.transaction(KV, 'readonly').objectStore(KV).get(HANDLE_KEY)
-      req.onsuccess = () => resolve((req.result as FileSystemFileHandle) ?? null)
-      req.onerror = () => resolve(null)
-    })
-  } catch {
-    return null
-  }
-}
-
-export async function clearDraft(): Promise<void> {
+/** Purge any document cache from earlier versions (autosaved draft + file
+ *  handle). The app no longer caches the working document — it opens files
+ *  directly — so this just cleans up leftover data on launch. */
+export async function clearCachedDoc(): Promise<void> {
   try {
     const db = await openDB()
     await new Promise<void>((resolve) => {
       const t = db.transaction(KV, 'readwrite')
       t.objectStore(KV).delete('draft')
+      t.objectStore(KV).delete('fileHandle')
       t.oncomplete = () => resolve()
       t.onerror = () => resolve()
     })
@@ -111,8 +64,13 @@ export async function listRecentFiles(): Promise<RecentFile[]> {
   })
 }
 
-/** Record a freshly opened/saved file (deduped by name, keeping only the newest). */
-export async function addRecentFile(name: string, bytes: ArrayBuffer): Promise<void> {
+/** Record a freshly opened/saved file (deduped by name, keeping only the newest).
+ *  `ref` (desktop path / Android URI) lets reopening re-read the current file. */
+export async function addRecentFile(
+  name: string,
+  bytes: ArrayBuffer,
+  ref?: RecentRef,
+): Promise<void> {
   try {
     const db = await openDB()
     await new Promise<void>((resolve, reject) => {
@@ -123,7 +81,7 @@ export async function addRecentFile(name: string, bytes: ArrayBuffer): Promise<v
         const existing = all.result
         existing.filter((f) => f.name === name).forEach((f) => store.delete(f.id))
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        store.put({ id, name, savedAt: Date.now(), bytes })
+        store.put({ id, name, savedAt: Date.now(), bytes, path: ref?.path, uri: ref?.uri })
         existing
           .filter((f) => f.name !== name)
           .sort((a, b) => b.savedAt - a.savedAt)

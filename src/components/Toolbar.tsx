@@ -7,6 +7,7 @@ import {
   exportWorkbook,
   pickAndReadWorkbook,
   openWorkbookTauri,
+  readWorkbookFromPath,
   isTauri,
   saveToHandle,
   saveWorkbookAs,
@@ -34,7 +35,6 @@ import {
   clearRecentFiles,
   listRecentFiles,
   relativeTime,
-  saveHandle,
   type RecentFile,
 } from '../lib/recentFiles'
 import { useLangStore, useT } from '../i18n'
@@ -42,6 +42,10 @@ import type { HAlign } from '../types'
 import Icon from './Icon'
 
 const CAN_SAVE_IN_PLACE = supportsFileSystemAccess()
+// Recent files re-read the file fresh from disk, which needs a persistent
+// reference: a path (desktop) or a SAF content URI (Android). Web and iOS have
+// neither, so the feature is hidden there.
+const SUPPORTS_RECENT = isTauri() || nativePlatform() === 'android'
 
 /** A small click-away dropdown: a trigger button plus a menu of items. */
 function Dropdown({
@@ -213,7 +217,7 @@ export default function Toolbar({
         loadWorkbook(res.wb.sheets, res.wb.fileName)
         setFileHandle(null)
         setFilePath(res.path)
-        addRecentFile(res.wb.fileName, res.bytes)
+        addRecentFile(res.wb.fileName, res.bytes, { path: res.path })
       } catch (err) {
         alert(t('readFail') + (err as Error).message)
       }
@@ -225,9 +229,8 @@ export default function Toolbar({
         if (!result) return
         loadWorkbook(result.wb.sheets, result.wb.fileName)
         setFileHandle(result.handle)
-        saveHandle(result.handle) // persist so Save works after a reload
         setFilePath(null)
-        addRecentFile(result.wb.fileName, result.bytes)
+        // Web has no Recent-files support (no persistent reference to re-read).
       } catch (err) {
         alert(t('readFail') + (err as Error).message)
       }
@@ -240,29 +243,31 @@ export default function Toolbar({
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      const bytes = await file.arrayBuffer()
       const wb = await readWorkbookFile(file)
       loadWorkbook(wb.sheets, wb.fileName)
       setFileHandle(null)
-      saveHandle(null)
       setFilePath(null)
-      addRecentFile(wb.fileName, bytes)
     } catch (err) {
       alert(t('readFail') + (err as Error).message)
     }
     e.target.value = ''
   }
 
-  // Reopen a file from the recent list (stored bytes; no live handle).
+  // Reopen a recent file, re-reading it fresh from disk (desktop: by path). Falls
+  // back to the stored byte snapshot if the fresh read fails (file moved/deleted).
   const openRecent = async (f: RecentFile) => {
     try {
-      const file = new File([f.bytes], f.name)
-      const wb = await readWorkbookFile(file)
+      let wb
+      if (f.path && isTauri()) {
+        wb = await readWorkbookFromPath(f.path)
+      }
+      if (!wb) {
+        wb = await readWorkbookFile(new File([f.bytes], f.name))
+      }
       loadWorkbook(wb.sheets, wb.fileName)
       setFileHandle(null)
-      saveHandle(null)
-      setFilePath(null)
-      addRecentFile(f.name, f.bytes) // bump recency
+      setFilePath(f.path ?? null)
+      addRecentFile(f.name, f.bytes, { path: f.path, uri: f.uri }) // bump recency
     } catch (err) {
       alert(t('readFail') + (err as Error).message)
     }
@@ -322,7 +327,6 @@ export default function Toolbar({
       const res = await saveWorkbookAs(hf, sheets, fileName, 'xlsx', charts, promptFileName)
       if (!res) return // user cancelled
       useStore.setState({ fileName: res.name, fileHandle: res.handle })
-      saveHandle(res.handle) // persist so Save works after a reload (Chromium)
       setFilePath(res.path ?? null) // desktop: remember the path for in-place Cmd+S
       if (res.saved) setSavedModal(res.saved)
     } catch (err) {
@@ -334,7 +338,6 @@ export default function Toolbar({
     if (confirm(t('newFileConfirm'))) {
       newWorkbook()
       setFileHandle(null)
-      saveHandle(null)
       setFilePath(null)
     }
   }
@@ -350,17 +353,19 @@ export default function Toolbar({
           <Icon name="open" />
           {t('open')}
         </button>
-        <Dropdown
-          title={t('recent')}
-          trigger={
-            <>
-              <Icon name="recent" />
-              {t('recent')}
-            </>
-          }
-        >
-          <RecentList onPick={openRecent} />
-        </Dropdown>
+        {SUPPORTS_RECENT && (
+          <Dropdown
+            title={t('recent')}
+            trigger={
+              <>
+                <Icon name="recent" />
+                {t('recent')}
+              </>
+            }
+          >
+            <RecentList onPick={openRecent} />
+          </Dropdown>
+        )}
         <Dropdown
           title={t('save')}
           trigger={

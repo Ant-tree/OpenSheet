@@ -10,7 +10,7 @@ import ChartPanel from './components/ChartPanel'
 import DataValidationPanel from './components/DataValidationPanel'
 import Toast from './components/Toast'
 import { useStore } from './store/useStore'
-import { saveDraft, saveHandle } from './lib/recentFiles'
+import { clearCachedDoc } from './lib/recentFiles'
 import { iterateSelection } from './lib/utils'
 import {
   exportWorkbook,
@@ -95,16 +95,12 @@ export default function App() {
             }
           })()
         } else if (supportsFileSystemAccess()) {
-          // Chromium web, no handle yet (e.g. after a draft/recent restore):
-          // prompt once with the Save-As picker, then remember the handle so
-          // later saves write in place.
+          // Chromium web, no handle yet: prompt once with the Save-As picker,
+          // then keep the handle in memory so later saves write in place.
           void (async () => {
             try {
               const res = await saveWorkbookAs(store.hf, store.sheets, store.fileName, 'xlsx', store.charts)
-              if (res) {
-                useStore.setState({ fileName: res.name, fileHandle: res.handle })
-                saveHandle(res.handle)
-              }
+              if (res) useStore.setState({ fileName: res.name, fileHandle: res.handle })
             } catch (err) {
               onErr(err as Error)
             }
@@ -196,12 +192,11 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [selection])
 
-  // Autosave to IndexedDB and recover the last session on load.
+  // Open the working document on launch (no document caching).
   useEffect(() => {
     // The desktop app reopens the last file FRESH from disk (so external edits
     // show up). Everywhere else we start blank and let the user open the file
-    // directly — we no longer auto-restore the autosaved draft, which could show
-    // a stale copy of a file changed elsewhere.
+    // directly — the app no longer caches/auto-restores the working document.
     const startPath = useStore.getState().filePath
     if (isTauri() && startPath) {
       readWorkbookFromPath(startPath)
@@ -214,20 +209,8 @@ export default function App() {
         })
         .catch(() => {})
     }
-
-    // Keep autosaving a recovery draft in the background (no longer auto-loaded).
-    let timer: number
-    let lastRev = useStore.getState().rev
-    const unsub = useStore.subscribe((state) => {
-      if (state.rev === lastRev) return
-      lastRev = state.rev
-      clearTimeout(timer)
-      timer = window.setTimeout(() => saveDraft(useStore.getState().serializeState()), 1200)
-    })
-    return () => {
-      clearTimeout(timer)
-      unsub()
-    }
+    // Purge any leftover document cache from earlier versions.
+    void clearCachedDoc()
   }, [])
 
   // Copy / cut / paste over the selection (skip while editing text or in the
