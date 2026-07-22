@@ -1,4 +1,9 @@
 import { Capacitor } from '@capacitor/core'
+// Static imports (not `await import(...)`): dynamic-import chunks fail to load in
+// the Capacitor WebView ("Failed to fetch dynamically imported module"), so the
+// plugins are bundled with the app instead of fetched on demand at save time.
+import { Filesystem, Directory } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -41,7 +46,6 @@ export function nativePlatform(): string {
  * app-specific storage if it isn't writable.
  */
 export async function saveFileNative(blob: Blob, filename: string): Promise<NativeSaveResult> {
-  const { Filesystem, Directory } = await import('@capacitor/filesystem')
   const data = await blobToBase64(blob)
   const candidates: [string, (typeof Directory)[keyof typeof Directory]][] = [
     ['Documents', Directory.Documents],
@@ -71,7 +75,6 @@ export async function saveFileNative(blob: Blob, filename: string): Promise<Nati
  * via the plugin's FileProvider); iOS shares fine via `url`.
  */
 export async function shareFileNative(result: NativeSaveResult): Promise<void> {
-  const { Share } = await import('@capacitor/share')
   try {
     await Share.share(
       nativePlatform() === 'android'
