@@ -578,11 +578,48 @@ table.grid {
 .sheet-tabs {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   padding: 4px 8px;
   background: var(--header-bg);
   border-top: 1px solid var(--border);
+}
+/* Only the tab strip scrolls; the prev/next buttons stay pinned at the edges. */
+.sheet-tabs-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
   overflow-x: auto;
+  scrollbar-width: none;
+}
+.sheet-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+/* Prev / next sheet buttons */
+.tab-nav {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--menu-bg);
+  color: var(--header-fg);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.tab-nav:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--fg);
+}
+.tab-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 .sheet-tab {
   padding: 5px 14px;
@@ -678,6 +715,11 @@ table.grid {
   .add-sheet {
     height: 32px;
     min-width: 34px;
+  }
+  .tab-nav {
+    width: 34px;
+    height: 34px;
+    font-size: 20px;
   }
 
   /* The formula bar keeps a comfortable touch font (the grid editor scales with

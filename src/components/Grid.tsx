@@ -167,10 +167,15 @@ export default function Grid() {
   // conditional formatting, borders). This depends only on the document, never on
   // the selection, so we memoize it per `rev` — selection-only re-renders (e.g. a
   // drag) then reuse the cache instead of recomputing every visible cell.
+  // The cache key is just "row,col", so it must also be invalidated when the
+  // active sheet changes (switching sheets does not bump `rev`) — otherwise the
+  // grid keeps showing the previous sheet's cell values.
   const contentCache = useRef(new Map<string, { text: string; isNum: boolean; contentStyle: React.CSSProperties }>())
   const contentRev = useRef(-1)
-  if (contentRev.current !== rev) {
+  const contentSheet = useRef(-1)
+  if (contentRev.current !== rev || contentSheet.current !== activeSheetId) {
     contentRev.current = rev
+    contentSheet.current = activeSheetId
     contentCache.current.clear()
   }
   const cellContent = (r: number, c: number, k: string, merge: MergeRange | undefined) => {
