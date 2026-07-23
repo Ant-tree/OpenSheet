@@ -283,6 +283,7 @@ export default function Grid() {
   const setCellContent = useStore((s) => s.setCellContent)
   const clearSelectedContents = useStore((s) => s.clearSelectedContents)
   const setColWidth = useStore((s) => s.setColWidth)
+  const setRowHeight = useStore((s) => s.setRowHeight)
 
   const dragging = useRef(false)
   // The edit text lives in a ref, and the cell <input> is uncontrolled, so
@@ -640,29 +641,44 @@ export default function Grid() {
     longPress.current = window.setTimeout(() => openContext(row, col, touch.clientX, touch.clientY), 500)
   }
 
-  // ----- column resize -----
-  const resizeState = useRef<{ col: number; startX: number; startW: number } | null>(null)
-  const onResizeDown = (col: number, e: React.MouseEvent) => {
+  // ----- column / row resize (mouse + touch, unified via Pointer Events) -----
+  // Pointer capture on the grabbed handle routes move/up to it even when the
+  // finger/cursor leaves the thin handle, and `touch-action: none` (CSS) stops a
+  // touch-drag on the handle from scrolling the grid instead of resizing.
+  const onColResizeDown = (col: number, e: React.PointerEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    resizeState.current = {
-      col,
-      startX: e.clientX,
-      startW: sheet.colWidths[col] ?? DEFAULT_COL_WIDTH,
-    }
-    const move = (ev: MouseEvent) => {
-      if (!resizeState.current) return
+    const startX = e.clientX
+    const startW = sheet.colWidths[col] ?? DEFAULT_COL_WIDTH
+    const move = (ev: PointerEvent) => {
       // Pointer delta is in screen px; column widths are stored unscaled.
-      const dx = (ev.clientX - resizeState.current.startX) / zoom
-      setColWidth(resizeState.current.col, resizeState.current.startW + dx)
+      setColWidth(col, startW + (ev.clientX - startX) / zoom)
     }
     const up = () => {
-      resizeState.current = null
-      window.removeEventListener('mousemove', move)
-      window.removeEventListener('mouseup', up)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
     }
-    window.addEventListener('mousemove', move)
-    window.addEventListener('mouseup', up)
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+  }
+  const onRowResizeDown = (row: number, e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startY = e.clientY
+    const startH = rowHeightUnscaled(row) // current (manual, auto-fit, or default)
+    const move = (ev: PointerEvent) => {
+      setRowHeight(row, startH + (ev.clientY - startY) / zoom)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
 
   // ----- touch range-selection handles (mobile) -----
@@ -884,7 +900,11 @@ export default function Grid() {
               >
                 <div className="colhead-wrap">
                   {colToLetter(c)}
-                  <div className="col-resize" onMouseDown={(e) => onResizeDown(c, e)} />
+                  <div
+                    className="col-resize"
+                    onPointerDown={(e) => onColResizeDown(c, e)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  />
                 </div>
               </th>
             ))}
@@ -930,6 +950,11 @@ export default function Grid() {
                 }
               >
                 {r + 1}
+                <div
+                  className="row-resize"
+                  onPointerDown={(e) => onRowResizeDown(r, e)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                />
               </th>
               {Array.from({ length: MAX_COLS }, (_, c) => {
                 const k = key(r, c)

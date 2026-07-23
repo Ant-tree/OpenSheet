@@ -165,6 +165,11 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Grid: **touch/mouse drag-resize** for columns AND rows via Pointer Events
+  (`touch-action: none` on the handles so a touch-drag resizes, not scrolls).
+  Row headers gained a bottom-edge resize handle. Handles sit *inside* the
+  header cell (parent `overflow: hidden` clips — and makes un-hittable — any
+  overhang), fatter hit target on coarse pointers.
 - Tests: added a committed suite — Vitest unit (`tests/unit`) + Playwright E2E
   (`tests/e2e`, playwright-core + Vite dev server). `npm test` / `test:e2e` /
   `test:all`. See `tests/README.md`.
