@@ -157,11 +157,13 @@ export default function Toolbar({
   onOpenCondFormat,
   onOpenChart,
   onOpenValidation,
+  onOpenShortcuts,
 }: {
   onOpenFind: () => void
   onOpenCondFormat: () => void
   onOpenChart: () => void
   onOpenValidation: () => void
+  onOpenShortcuts: () => void
 }) {
   const t = useT()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -680,6 +682,17 @@ export default function Toolbar({
             {t('unfreeze')}
           </button>
         </Dropdown>
+      </div>
+
+      <div className="group">
+        <button
+          className="tbtn"
+          title={t('keyboardShortcuts')}
+          aria-label={t('keyboardShortcuts')}
+          onClick={onOpenShortcuts}
+        >
+          <Icon name="help" />
+        </button>
       </div>
       {nameModal && (
         <SaveAsDialog

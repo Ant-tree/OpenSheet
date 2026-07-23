@@ -8,6 +8,7 @@ import FindReplace from './components/FindReplace'
 import CondFormatPanel from './components/CondFormatPanel'
 import ChartPanel from './components/ChartPanel'
 import DataValidationPanel from './components/DataValidationPanel'
+import ShortcutsHelp from './components/ShortcutsHelp'
 import Toast from './components/Toast'
 import { useStore } from './store/useStore'
 import { clearCachedDoc } from './lib/recentFiles'
@@ -31,6 +32,7 @@ export default function App() {
   const [showCond, setShowCond] = useState(false)
   const [showChart, setShowChart] = useState(false)
   const [showValidation, setShowValidation] = useState(false)
+  const [showShortcuts, setShowShortcuts] = useState(false)
   const lang = useLangStore((s) => s.lang)
   const setLang = useLangStore((s) => s.setLang)
   const theme = useThemeStore((s) => s.theme)
@@ -109,6 +111,13 @@ export default function App() {
           // Safari/Firefox: no file-write API — download a copy.
           exportWorkbook(store.hf, store.sheets, store.fileName, 'xlsx', store.charts).catch(onErr)
         }
+        return
+      }
+
+      // Keyboard-shortcuts help (F1, or Ctrl/Cmd+/).
+      if (e.key === 'F1' || ((e.metaKey || e.ctrlKey) && e.key === '/')) {
+        e.preventDefault()
+        setShowShortcuts((v) => !v)
         return
       }
 
@@ -254,12 +263,14 @@ export default function App() {
         onOpenCondFormat={() => setShowCond((v) => !v)}
         onOpenChart={() => setShowChart(true)}
         onOpenValidation={() => setShowValidation((v) => !v)}
+        onOpenShortcuts={() => setShowShortcuts((v) => !v)}
       />
       <FormulaBar />
       {findMode && <FindReplace mode={findMode} onClose={() => setFindMode(null)} />}
       {showCond && <CondFormatPanel onClose={() => setShowCond(false)} />}
       {showChart && <ChartPanel onClose={() => setShowChart(false)} />}
       {showValidation && <DataValidationPanel onClose={() => setShowValidation(false)} />}
+      {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
       <div className="grid-area">
         <Grid />
         <ChartLayer />

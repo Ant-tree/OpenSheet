@@ -978,6 +978,69 @@ table.grid {
   font-weight: 700;
   color: var(--fg);
 }
+/* Keyboard-shortcuts help modal */
+.shortcuts-modal {
+  background: var(--menu-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  width: min(460px, 94vw);
+  max-height: min(80vh, 640px);
+  display: flex;
+  flex-direction: column;
+}
+.shortcuts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.shortcuts-body {
+  padding: 8px 16px 16px;
+  overflow-y: auto;
+}
+.shortcuts-group {
+  margin-top: 12px;
+}
+.shortcuts-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--header-fg);
+  margin-bottom: 4px;
+}
+.shortcuts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+}
+.shortcuts-desc {
+  font-size: 13.5px;
+  color: var(--fg);
+}
+.shortcuts-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.shortcuts-kbd {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--fg);
+  background: var(--cell-bg);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 4px 6px;
+  white-space: nowrap;
+}
 .saved-name {
   font-size: 14px;
   color: var(--fg);
