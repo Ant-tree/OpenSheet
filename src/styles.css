@@ -491,6 +491,13 @@ table.grid {
 .cell.num {
   text-align: right;
 }
+/* Wrapped-cell body: multi-line text clipped to the (auto-grown) row height. */
+.cell-wrap {
+  white-space: normal;
+  overflow: hidden;
+  word-break: break-word;
+  line-height: var(--cell-lh, 22px);
+}
 .cell.selected {
   background: var(--accent-soft);
 }

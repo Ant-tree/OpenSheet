@@ -11,6 +11,7 @@ import {
 import { borderCss, displayValue, strongerBorder } from '../lib/format'
 import { condStyleFor } from '../lib/condFormat'
 import { colToLetter, isInAnyRange, isInSelection, key, selectionBounds } from '../lib/utils'
+import { wrappedLineCount } from '../lib/textMeasure'
 import type { BorderSide, CellBorders, CellFormat, CellRef, MergeRange } from '../types'
 import { useZoomStore } from '../zoom'
 import ContextMenu from './ContextMenu'
@@ -152,13 +153,69 @@ export default function Grid() {
     for (let r = 0; r < MAX_ROWS; r++) if (!hiddenRows.has(r)) arr.push(r)
     return arr
   }, [hiddenRows])
+
+  // Auto row height (unscaled px): rows with a wrapped cell grow to fit the
+  // wrapped text so it no longer clips. A manual `rowHeights[r]` overrides this;
+  // rows without wrapped content stay at DEFAULT_ROW_HEIGHT. Deterministic
+  // canvas-based line counting keeps this consistent with the clipped render.
+  const autoRowHeights = useMemo(() => {
+    const LINE = DEFAULT_ROW_HEIGHT - 2 // per-line height (unscaled), matches --cell-lh at zoom 1
+    const PAD = 2
+    const map: Record<number, number> = {}
+    for (const k in sheet.formats) {
+      const fmt = sheet.formats[k]
+      if (!fmt?.wrap) continue
+      const comma = k.indexOf(',')
+      const r = Number(k.slice(0, comma))
+      const c = Number(k.slice(comma + 1))
+      if (sheet.rowHeights[r] != null) continue // manual height wins
+      const computed = useStore.getState().getComputed(r, c)
+      const text = displayValue(computed, fmt)
+      if (!text) continue
+      const colW = sheet.colWidths[c] ?? DEFAULT_COL_WIDTH
+      const lines = wrappedLineCount(text, colW - 10) // 0 5px horizontal padding
+      if (lines <= 1) continue
+      const h = lines * LINE + PAD
+      if (h > (map[r] ?? DEFAULT_ROW_HEIGHT)) map[r] = h
+    }
+    return map
+    // activeSheetId ensures a recompute on sheet switch (which doesn't bump rev).
+  }, [rev, activeSheetId, sheet.formats, sheet.colWidths, sheet.rowHeights])
+
+  const rowHeightUnscaled = useCallback(
+    (r: number) => sheet.rowHeights[r] ?? autoRowHeights[r] ?? DEFAULT_ROW_HEIGHT,
+    [sheet.rowHeights, autoRowHeights],
+  )
+  const rowHeightPx = useCallback(
+    (r: number) => Math.round(rowHeightUnscaled(r) * zoom),
+    [rowHeightUnscaled, zoom],
+  )
+
+  // Cumulative top (scaled px) of each visible row: visTop[i] = summed height of
+  // visibleRows[0..i-1]. Length = visibleRows.length + 1. Replaces uniform-RH
+  // math so variable row heights window and space correctly.
+  const visTop = useMemo(() => {
+    const arr = new Array<number>(visibleRows.length + 1)
+    arr[0] = 0
+    for (let i = 0; i < visibleRows.length; i++) arr[i + 1] = arr[i] + rowHeightPx(visibleRows[i])
+    return arr
+  }, [visibleRows, rowHeightPx])
+
   const renderVisualIndices = useMemo(() => {
     const overscan = 8
-    const firstI = Math.max(0, Math.floor(viewport.top / RH) - overscan)
-    const lastI = Math.min(
-      visibleRows.length - 1,
-      Math.ceil((viewport.top + viewport.height) / RH) + overscan,
-    )
+    // Largest visual index whose row starts at or before a given y (binary search).
+    const indexAt = (y: number) => {
+      let lo = 0
+      let hi = visibleRows.length // search visTop[0..length]
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (visTop[mid] <= y) lo = mid + 1
+        else hi = mid
+      }
+      return lo - 1 // last i with visTop[i] <= y
+    }
+    const firstI = Math.max(0, indexAt(viewport.top) - overscan)
+    const lastI = Math.min(visibleRows.length - 1, indexAt(viewport.top + viewport.height) + overscan)
     const nFrozen = sheet.frozenRows ?? 0
     const set = new Set<number>()
     for (let i = 0; i < nFrozen && i < visibleRows.length; i++) set.add(i) // frozen rows always
@@ -168,7 +225,7 @@ export default function Grid() {
       hiddenRows.size === 0 ? selection.focus.row : visibleRows.indexOf(selection.focus.row)
     if (activeI >= 0 && activeI < visibleRows.length) set.add(activeI)
     return [...set].sort((a, b) => a - b)
-  }, [viewport, visibleRows, sheet.frozenRows, selection.focus.row, RH])
+  }, [viewport, visibleRows, visTop, sheet.frozenRows, selection.focus.row, hiddenRows])
 
   // Per-cell content (value text, number flag, and content-derived style: format,
   // conditional formatting, borders). This depends only on the document, never on
@@ -761,10 +818,9 @@ export default function Grid() {
   const frozenCols = sheet.frozenCols ?? 0
   const rowTop = useMemo(() => {
     const arr = [RH] // below the sticky column-header row
-    for (let r = 0; r < frozenRows; r++)
-      arr.push(arr[r] + Math.round((sheet.rowHeights[r] ?? DEFAULT_ROW_HEIGHT) * zoom))
+    for (let r = 0; r < frozenRows; r++) arr.push(arr[r] + rowHeightPx(r))
     return arr
-  }, [sheet.rowHeights, frozenRows, zoom, RH])
+  }, [frozenRows, rowHeightPx, RH])
   const colLeft = useMemo(() => {
     const arr = [HW] // right of the sticky row-number column
     for (let c = 0; c < frozenCols; c++)
@@ -846,9 +902,12 @@ export default function Grid() {
                 </tr>,
               )
             for (const vi of renderVisualIndices) {
-              spacer((vi - prevI - 1) * RH, `sp-${vi}`)
+              // Gap = summed height of the skipped rows between the last rendered
+              // row and this one (variable heights, not uniform RH).
+              spacer(visTop[vi] - visTop[prevI + 1], `sp-${vi}`)
               prevI = vi
               const r = visibleRows[vi]
+              const rh = rowHeightPx(r)
               body.push(
             <tr key={r}>
               <th
@@ -856,11 +915,12 @@ export default function Grid() {
                 style={
                   r < frozenRows
                     ? {
+                        height: rh,
                         top: rowTop[r],
                         zIndex: 4,
                         borderBottom: r === frozenRows - 1 ? '2px solid #9aa4b2' : undefined,
                       }
-                    : undefined
+                    : { height: rh }
                 }
                 onMouseDown={() =>
                   setSelection({
@@ -929,7 +989,11 @@ export default function Grid() {
                         {!isEditing && (
                           <span
                             className="cell-text"
-                            style={fmt?.wrap ? { whiteSpace: 'normal' } : undefined}
+                            style={
+                              fmt?.wrap
+                                ? { whiteSpace: 'normal', maxHeight: rh, overflow: 'hidden' }
+                                : undefined
+                            }
                           >
                             {text}
                           </span>
@@ -959,6 +1023,10 @@ export default function Grid() {
                           </button>
                         )}
                       </>
+                    ) : fmt?.wrap ? (
+                      <div className="cell-wrap" style={{ maxHeight: rh }}>
+                        {text}
+                      </div>
                     ) : (
                       text
                     )}
@@ -988,7 +1056,7 @@ export default function Grid() {
             </tr>,
               )
             }
-            spacer((visibleRows.length - 1 - prevI) * RH, 'sp-tail')
+            spacer(visTop[visibleRows.length] - visTop[prevI + 1], 'sp-tail')
             return body
           })()}
         </tbody>

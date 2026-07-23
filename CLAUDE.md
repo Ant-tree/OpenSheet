@@ -58,11 +58,14 @@ that's an environment limitation, not a code error.
 
 ## Feature set (current)
 
-Grid & editing: virtualized grid, IME-safe editing, formulas + autocomplete,
-copy/cut/paste (TSV), undo/redo, fill handle + Ctrl+D/R, notes, context menu
-(insert/delete rows/cols, etc.).
+Grid & editing: virtualized grid (variable row heights, auto-fit for wrap),
+IME-safe editing, formulas + autocomplete, copy/cut/paste (TSV), undo/redo,
+fill handle + Ctrl+D/R, notes, context menu (insert/delete rows/cols, etc.),
+non-contiguous multi-range selection (Ctrl/⌘-click).
 Formatting: bold/italic/underline, h/v align, wrap, text/fill color, number
-formats (currency/percent/decimals), borders, merge/unmerge, freeze panes.
+formats (currency/percent/decimals), borders, merge/unmerge, freeze panes,
+format painter.
+Files/UX: auto-save toggle (in-place platforms), keyboard-shortcuts help (F1).
 Data: sort, AutoFilter, conditional formatting, list data-validation (dropdowns),
 charts (bar/line/pie) rendered to SVG and embedded as PNG on export.
 Sheets: multiple sheets + tabs; switch with **Ctrl/Cmd+PageUp/PageDown**; the
@@ -129,9 +132,13 @@ Legend: ✅ supported · ❌ not supported (feature/menu item absent).
    another cell commits + moves instead of appearing to copy the formula. Touch
    range-selection uses draggable corner handles + edge auto-scroll (a one-finger
    drag scrolls). `IS_COARSE` gates this.
-8. **Rows are a FIXED height** in the virtualization (`DEFAULT_ROW_HEIGHT`).
-   `setRowHeight` exists in the store but the grid does not render variable
-   heights, so `wrap` text currently clips. (Known limitation / future work.)
+8. **Row heights are variable in the virtualization.** Effective height is
+   `rowHeights[r]` (manual) → auto-fit for wrapped cells → `DEFAULT_ROW_HEIGHT`.
+   Auto-fit uses deterministic canvas line-counting (`lib/textMeasure.ts`), and
+   the rendered cell is clipped to that computed height so windowing math and
+   layout stay pixel-consistent (no scroll drift). Windowing + spacers use the
+   cumulative `visTop` prefix sum (binary search), NOT uniform `RH` — keep them
+   in sync if you touch either. Merged wrapped cells are not auto-grown.
 9. **Native code can't be verified in the sandbox** (no Android/iOS/GTK build).
    Rust/Java/Swift changes must be built + tested on device by the maintainer.
    Web + desktop-JS behavior IS verifiable headlessly (see below).
@@ -158,6 +165,16 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Tests: added a committed suite — Vitest unit (`tests/unit`) + Playwright E2E
+  (`tests/e2e`, playwright-core + Vite dev server). `npm test` / `test:e2e` /
+  `test:all`. See `tests/README.md`.
+- Feature: **auto row height** for wrapped cells (variable-height virtualization).
+- Feature: **non-contiguous multi-range selection** (Ctrl/⌘-click adds a range;
+  formatting / clear / status-bar stats span all ranges).
+- Feature: **auto-save** toggle (debounced in-place save; web-Chromium/desktop
+  only, hidden where there's no write-back target).
+- Feature: **format painter** (copy a cell's formatting onto a clicked range).
+- Feature: **keyboard-shortcuts help** panel (F1 / toolbar `?`).
 - Desktop: show the "Save (in place)" menu item (writes back to the path).
 - Files: **removed document cache**; open files directly; desktop reopens the
   last file fresh; Recent files hidden on web/iOS, and on desktop/Android they
