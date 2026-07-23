@@ -263,6 +263,14 @@ body {
   width: 16px;
   height: 16px;
 }
+/* Checkmark slot for menu toggle items (keeps labels aligned when unchecked). */
+.menu-check {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  color: var(--accent);
+  font-weight: 700;
+}
 
 /* Zoom control in the status bar */
 .zoom-control {

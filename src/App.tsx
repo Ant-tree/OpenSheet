@@ -25,6 +25,7 @@ import {
 import { t as translate, useLangStore, useT } from './i18n'
 import { useThemeStore, type Theme } from './theme'
 import { useZoomStore, MIN_ZOOM, MAX_ZOOM } from './zoom'
+import { useSettingsStore } from './settings'
 
 export default function App() {
   const t = useT()
@@ -43,7 +44,8 @@ export default function App() {
   const resetZoom = useZoomStore((s) => s.resetZoom)
   const selection = useStore((s) => s.selection)
   const fileName = useStore((s) => s.fileName)
-  useStore((s) => s.rev)
+  const rev = useStore((s) => s.rev)
+  const autoSave = useSettingsStore((s) => s.autoSave)
 
   // Aggregate numeric stats over the current selection (Excel-style status bar).
   const { count, sum, avg, min, max } = (() => {
@@ -227,6 +229,28 @@ export default function App() {
     // Purge any leftover document cache from earlier versions.
     void clearCachedDoc()
   }, [])
+
+  // Auto-save: when enabled, write edits back to the open file (debounced). Only
+  // acts where in-place save exists — a File System Access handle (Chromium web)
+  // or a known path (desktop). Never pops a picker, and stays silent on failure
+  // (the user can always Cmd+S). No-op on mobile (no write-back target).
+  useEffect(() => {
+    if (!autoSave) return
+    const s = useStore.getState()
+    const hasHandle = !!s.fileHandle
+    const hasPath = isTauri() && !!s.filePath
+    if (!hasHandle && !hasPath) return
+    const timer = setTimeout(() => {
+      const cur = useStore.getState()
+      if (cur.fileHandle) {
+        saveToHandle(cur.hf, cur.sheets, cur.fileHandle, cur.charts).catch(() => {})
+      } else if (isTauri() && cur.filePath) {
+        const fmt = cur.filePath.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx'
+        saveWorkbookToPath(cur.hf, cur.sheets, cur.filePath, fmt, cur.charts).catch(() => {})
+      }
+    }, 1200)
+    return () => clearTimeout(timer)
+  }, [rev, autoSave])
 
   // Copy / cut / paste over the selection (skip while editing text or in the
   // formula bar so their native clipboard behaviour still works).

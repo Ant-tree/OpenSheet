@@ -41,6 +41,7 @@ import {
   type RecentFile,
 } from '../lib/recentFiles'
 import { useLangStore, useT } from '../i18n'
+import { useSettingsStore } from '../settings'
 import type { HAlign } from '../types'
 import Icon from './Icon'
 
@@ -176,6 +177,8 @@ export default function Toolbar({
   const applyBorders = useStore((s) => s.applyBorders)
   const startFormatPainter = useStore((s) => s.startFormatPainter)
   const painterActive = useStore((s) => s.formatPainter !== null)
+  const autoSave = useSettingsStore((s) => s.autoSave)
+  const toggleAutoSave = useSettingsStore((s) => s.toggleAutoSave)
   const setFreeze = useStore((s) => s.setFreeze)
   const loadWorkbook = useStore((s) => s.loadWorkbook)
   const newWorkbook = useStore((s) => s.newWorkbook)
@@ -420,6 +423,25 @@ export default function Toolbar({
                 {t('saveInPlace')}
               </span>
               <span className="menu-hint">⌘S</span>
+            </button>
+          )}
+          {canSaveInPlace && (
+            <button
+              className="menu-item"
+              role="menuitemcheckbox"
+              aria-checked={autoSave}
+              onClick={(e) => {
+                // Keep the menu open so the toggle state is visible.
+                e.stopPropagation()
+                toggleAutoSave()
+                showToast(t(useSettingsStore.getState().autoSave ? 'autoSaveOn' : 'autoSaveOff'))
+              }}
+              title={t('autoSaveHint')}
+            >
+              <span className="menu-label">
+                <span className={`menu-check${autoSave ? ' on' : ''}`}>{autoSave ? '✓' : ''}</span>
+                {t('autoSave')}
+              </span>
             </button>
           )}
           <button className="menu-item" onClick={saveAs}>
