@@ -138,13 +138,23 @@ Legend: ✅ supported · ❌ not supported (feature/menu item absent).
 
 ## Testing approach used here
 
-Headless Chromium (`playwright-core` + the preinstalled browser at
-`/opt/pw-browsers/chromium-*/chrome-linux/chrome`) drives the Vite dev server to
-verify web behavior. `window.store` is exposed in dev (`main.tsx`). File System
-Access handles can be exercised with real **OPFS** handles
-(`navigator.storage.getDirectory()`) which are structured-cloneable and work
-headlessly. `isTauri()`/native paths are gated off on the web, so web tests
-confirm no regressions there.
+There is a **committed test suite** (see `tests/README.md`):
+
+- `npm test` — Vitest unit tests (`tests/unit/`): pure `src/lib` functions.
+- `npm run test:e2e` — Playwright E2E (`tests/e2e/`): real Chromium
+  (`playwright-core`, no bundled download) driving the app on a Vite dev server
+  started in `globalSetup`. Tests read `window.store` (exposed in dev by
+  `main.tsx`) to assert on document state and drive the real UI (clicks, tabs,
+  keyboard). The browser is resolved via `$OPENSHEET_CHROME`, a `chromium-*`
+  dir under `$PLAYWRIGHT_BROWSERS_PATH`, or playwright-core's own install.
+- `npm run test:all` — both.
+
+Add a regression test with any behavior fix (the sheet-switch stale-content bug
+has one in `app.e2e.test.ts`). File System Access can also be exercised with
+real **OPFS** handles (`navigator.storage.getDirectory()`), which are
+structured-cloneable and work headlessly. `isTauri()`/native paths are gated
+off on the web, so web tests confirm no regressions there; native shells
+(Tauri/iOS/Android) and OS pickers can't be driven headlessly.
 
 ## Session changelog (features + fixes, newest first)
 
