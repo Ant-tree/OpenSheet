@@ -13,6 +13,7 @@ import {
   isTauri,
   saveToHandle,
   saveWorkbookAs,
+  saveWorkbookToPath,
   saveWorkbookViaSaf,
   supportsFileSystemAccess,
 } from '../lib/fileIO'
@@ -180,6 +181,10 @@ export default function Toolbar({
   const selection = useStore((s) => s.selection)
   useStore((s) => s.rev) // subscribe so active-state buttons re-render
   const fileHandle = useStore((s) => s.fileHandle)
+  const filePath = useStore((s) => s.filePath)
+  // "Save" (write back to the open file): Chromium via a handle, desktop via a path.
+  const canSaveInPlace = CAN_SAVE_IN_PLACE || isTauri()
+  const hasTarget = !!fileHandle || !!filePath
 
   const active = getFormat(selection.focus.row, selection.focus.col)
 
@@ -292,10 +297,16 @@ export default function Toolbar({
   }
 
   const saveInPlace = async () => {
-    const { hf, sheets, fileHandle, charts } = useStore.getState()
-    if (!fileHandle) return
+    const { hf, sheets, fileHandle, filePath, charts } = useStore.getState()
     try {
-      await saveToHandle(hf, sheets, fileHandle, charts)
+      if (fileHandle) {
+        // Chromium: write back through the File System Access handle.
+        await saveToHandle(hf, sheets, fileHandle, charts)
+      } else if (isTauri() && filePath) {
+        // Desktop app: write back to the known path.
+        const fmt = filePath.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx'
+        await saveWorkbookToPath(hf, sheets, filePath, fmt, charts)
+      }
     } catch (err) {
       alert(t('saveFail') + (err as Error).message)
     }
@@ -393,12 +404,12 @@ export default function Toolbar({
             </>
           }
         >
-          {CAN_SAVE_IN_PLACE && (
+          {canSaveInPlace && (
             <button
               className="menu-item"
               onClick={saveInPlace}
-              disabled={!fileHandle}
-              title={fileHandle ? undefined : t('saveInPlaceHint')}
+              disabled={!hasTarget}
+              title={hasTarget ? undefined : t('saveInPlaceHint')}
             >
               <span className="menu-label">
                 <Icon name="save" />
