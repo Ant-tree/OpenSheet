@@ -1,8 +1,10 @@
 # CLAUDE.md — OpenSheet
 
-Project context for Claude Code. OpenSheet is an offline-first spreadsheet app
-that ships as a **web app / PWA**, a **Tauri desktop app** (macOS/Windows/Linux),
-and a **Capacitor mobile app** (iOS/Android) from one React/TypeScript codebase.
+Project context for Claude Code. OpenSheet is a spreadsheet app that ships as a
+**web app**, a **Tauri desktop app** (macOS/Windows/Linux), and a **Capacitor
+mobile app** (iOS/Android) from one React/TypeScript codebase. (No PWA / service
+worker — the desktop and mobile shells bundle the app locally, and a precaching
+worker on the web only risked serving stale assets.)
 
 ## Tech stack
 
@@ -165,6 +167,11 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Removed the **PWA** (vite-plugin-pwa): no service worker / web manifest. The
+  web build is a plain web app; desktop/mobile bundle `dist/` locally and are
+  unaffected. `main.tsx` unregisters any worker + clears caches a prior version
+  left, so existing web installs shed the old precache. Dropped orphaned
+  `public/pwa-*.png` icons.
 - Grid: **touch/mouse drag-resize** for columns AND rows via Pointer Events
   (`touch-action: none` on the handles so a touch-drag resizes, not scrolls).
   Row headers gained a bottom-edge resize handle. Handles sit *inside* the
