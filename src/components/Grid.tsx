@@ -10,7 +10,7 @@ import {
 } from '../store/useStore'
 import { borderCss, displayValue, strongerBorder } from '../lib/format'
 import { condStyleFor } from '../lib/condFormat'
-import { colToLetter, isInSelection, key, selectionBounds } from '../lib/utils'
+import { colToLetter, isInAnyRange, isInSelection, key, selectionBounds } from '../lib/utils'
 import type { BorderSide, CellBorders, CellFormat, CellRef, MergeRange } from '../types'
 import { useZoomStore } from '../zoom'
 import ContextMenu from './ContextMenu'
@@ -20,6 +20,11 @@ import FilterDropdown from './FilterDropdown'
 /** True when the primary pointer is touch (phones/tablets): enables touch-drag
  *  selection handles and disables desktop-only formula "point mode" by tap. */
 const IS_COARSE = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
+// The "add to selection" modifier: ⌘ on macOS (Ctrl+click there is a right-click),
+// Ctrl elsewhere.
+const IS_MAC =
+  typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent)
+const isAdditiveClick = (e: React.MouseEvent) => (IS_MAC ? e.metaKey : e.ctrlKey)
 
 /**
  * Compute the borders to actually paint for a rendered cell (a normal cell, or
@@ -85,6 +90,7 @@ export default function Grid() {
   const activeSheetId = useStore((s) => s.activeSheetId)
   const sheets = useStore((s) => s.sheets)
   const painterArmed = useStore((s) => s.formatPainter !== null)
+  const extraRanges = useStore((s) => s.extraRanges)
   const sheet = useMemo(() => sheets.find((x) => x.id === activeSheetId)!, [sheets, activeSheetId])
 
   // ----- zoom -----
@@ -213,6 +219,8 @@ export default function Grid() {
   }
 
   const setSelection = useStore((s) => s.setSelection)
+  const addSelectionRange = useStore((s) => s.addSelectionRange)
+  const clearExtraRanges = useStore((s) => s.clearExtraRanges)
   const setEditing = useStore((s) => s.setEditing)
   const moveSelection = useStore((s) => s.moveSelection)
   const setCellContent = useStore((s) => s.setCellContent)
@@ -467,8 +475,15 @@ export default function Grid() {
     if (!(e.target instanceof HTMLInputElement)) e.preventDefault()
     if (editing) commitEdit('none')
     if (e.shiftKey) {
+      // Extend the active range; keep any existing extra ranges.
       setSelection({ anchor: selection.anchor, focus: { row, col } })
+    } else if (isAdditiveClick(e)) {
+      // Ctrl/⌘-click: commit the current range and start a new one here, so the
+      // selection becomes non-contiguous.
+      addSelectionRange({ row, col })
     } else {
+      // Plain click: collapse back to a single range.
+      clearExtraRanges()
       setSelection({ anchor: { row, col }, focus: { row, col } })
     }
     dragging.current = true
@@ -862,7 +877,8 @@ export default function Grid() {
                 const merge = anchorOf.get(k)
                 const isEditing = editing?.row === r && editing?.col === c
                 const isActive = selection.focus.row === r && selection.focus.col === c
-                const selected = isInSelection(r, c, selection)
+                const selected =
+                  isInSelection(r, c, selection) || isInAnyRange(r, c, extraRanges)
                 const inFill =
                   !!fillTarget &&
                   r >= fillTarget.top &&

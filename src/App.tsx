@@ -12,7 +12,7 @@ import ShortcutsHelp from './components/ShortcutsHelp'
 import Toast from './components/Toast'
 import { useStore } from './store/useStore'
 import { clearCachedDoc } from './lib/recentFiles'
-import { iterateSelection } from './lib/utils'
+import { iterateMultiSelection } from './lib/utils'
 import {
   exportWorkbook,
   saveToHandle,
@@ -43,6 +43,7 @@ export default function App() {
   const zoomOut = useZoomStore((s) => s.zoomOut)
   const resetZoom = useZoomStore((s) => s.resetZoom)
   const selection = useStore((s) => s.selection)
+  const extraRanges = useStore((s) => s.extraRanges)
   const fileName = useStore((s) => s.fileName)
   const rev = useStore((s) => s.rev)
   const autoSave = useSettingsStore((s) => s.autoSave)
@@ -54,7 +55,7 @@ export default function App() {
     let sum = 0
     let min = Infinity
     let max = -Infinity
-    for (const ref of iterateSelection(selection)) {
+    for (const ref of iterateMultiSelection(selection, extraRanges)) {
       const v = get(ref.row, ref.col)
       if (typeof v === 'number') {
         count++

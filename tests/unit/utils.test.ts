@@ -11,6 +11,8 @@ import {
   shiftFormulaRefs,
   replaceCaseInsensitive,
   colFromLetters,
+  isInAnyRange,
+  iterateMultiSelection,
 } from '../../src/lib/utils'
 import type { Selection } from '../../src/types'
 
@@ -94,6 +96,42 @@ describe('shiftFormulaRefs', () => {
   test('clamps at column A / row 1', () => {
     expect(shiftFormulaRefs('=A1', 0, -1)).toBe('=A1')
     expect(shiftFormulaRefs('=A1', -1, 0)).toBe('=A1')
+  })
+})
+
+describe('multi-range selection', () => {
+  test('isInAnyRange', () => {
+    const ranges = [
+      { top: 0, bottom: 1, left: 0, right: 1 },
+      { top: 5, bottom: 5, left: 5, right: 5 },
+    ]
+    expect(isInAnyRange(0, 0, ranges)).toBe(true)
+    expect(isInAnyRange(1, 1, ranges)).toBe(true)
+    expect(isInAnyRange(5, 5, ranges)).toBe(true)
+    expect(isInAnyRange(3, 3, ranges)).toBe(false)
+    expect(isInAnyRange(0, 0, [])).toBe(false)
+  })
+
+  test('iterateMultiSelection yields extra ranges then the active range', () => {
+    const cells = [
+      ...iterateMultiSelection(sel([2, 2], [2, 2]), [{ top: 0, bottom: 0, left: 0, right: 1 }]),
+    ]
+    expect(cells).toEqual([
+      { row: 0, col: 0 },
+      { row: 0, col: 1 },
+      { row: 2, col: 2 },
+    ])
+  })
+
+  test('iterateMultiSelection de-duplicates overlapping cells', () => {
+    const cells = [
+      ...iterateMultiSelection(sel([0, 0], [1, 1]), [{ top: 0, bottom: 0, left: 0, right: 0 }]),
+    ]
+    // A1 appears in both the extra range and the active range — visited once.
+    const keys = cells.map((c) => `${c.row},${c.col}`)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(keys).toContain('0,0')
+    expect(cells.length).toBe(4)
   })
 })
 

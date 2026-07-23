@@ -3,6 +3,7 @@ import { HyperFormula } from 'hyperformula'
 import type {
   BorderSide,
   CellFormat,
+  CellRef,
   ChartSpec,
   CondFormatRule,
   DataValidation,
@@ -11,6 +12,7 @@ import type {
   SheetMeta,
 } from '../types'
 import {
+  iterateMultiSelection,
   iterateSelection,
   key,
   replaceCaseInsensitive,
@@ -101,6 +103,14 @@ interface StoreState {
   setSelection: (sel: Selection) => void
   setEditing: (cell: { row: number; col: number } | null) => void
   moveSelection: (dRow: number, dCol: number, extend: boolean) => void
+  /** Extra committed rectangles for a non-contiguous (Ctrl/Cmd-click) selection.
+   *  The active `selection` is the range currently being edited/extended. */
+  extraRanges: MergeRange[]
+  /** Commit the current `selection` to `extraRanges` and start a fresh active
+   *  selection at `cell` (Ctrl/Cmd-click to add to the selection). */
+  addSelectionRange: (cell: CellRef) => void
+  /** Drop all extra ranges (back to a single-range selection). */
+  clearExtraRanges: () => void
 
   applyFormat: (patch: Partial<CellFormat>) => void
   applyBorders: (preset: BorderPreset) => void
@@ -249,6 +259,7 @@ export const useStore = create<StoreState>((set, get) => {
     past: [],
     future: [],
     formatPainter: null,
+    extraRanges: [],
 
     activeSheet() {
       const s = get()
@@ -299,15 +310,30 @@ export const useStore = create<StoreState>((set, get) => {
       set({
         selection: extend ? { anchor: selection.anchor, focus } : { anchor: focus, focus },
         editing: null,
+        // Keyboard navigation collapses back to a single range.
+        extraRanges: [],
       })
+    },
+
+    addSelectionRange(cell) {
+      const b = selectionBounds(get().selection)
+      set({
+        extraRanges: [...get().extraRanges, { top: b.top, left: b.left, bottom: b.bottom, right: b.right }],
+        selection: { anchor: cell, focus: cell },
+        editing: null,
+      })
+    },
+
+    clearExtraRanges() {
+      if (get().extraRanges.length) set({ extraRanges: [] })
     },
 
     applyFormat(patch) {
       pushUndo(set, get)
-      const { selection } = get()
+      const { selection, extraRanges } = get()
       const sheet = get().activeSheet()
       const formats = { ...sheet.formats }
-      for (const ref of iterateSelection(selection)) {
+      for (const ref of iterateMultiSelection(selection, extraRanges)) {
         const k = key(ref.row, ref.col)
         formats[k] = { ...formats[k], ...patch }
       }
@@ -390,8 +416,8 @@ export const useStore = create<StoreState>((set, get) => {
 
     clearSelectedContents() {
       pushUndo(set, get)
-      const { hf, activeSheetId, selection } = get()
-      for (const ref of iterateSelection(selection)) {
+      const { hf, activeSheetId, selection, extraRanges } = get()
+      for (const ref of iterateMultiSelection(selection, extraRanges)) {
         hf.setCellContents({ sheet: activeSheetId, row: ref.row, col: ref.col }, null)
       }
       bump(set)

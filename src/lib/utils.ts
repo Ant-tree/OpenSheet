@@ -52,6 +52,45 @@ export function* iterateSelection(sel: Selection): Generator<CellRef> {
   }
 }
 
+/** Inclusive rectangle bounds, as used for the extra (non-contiguous) ranges. */
+export interface RangeBounds {
+  top: number
+  bottom: number
+  left: number
+  right: number
+}
+
+/** True if (row,col) falls inside any of the given rectangles. */
+export function isInAnyRange(row: number, col: number, ranges: RangeBounds[]): boolean {
+  for (const b of ranges) {
+    if (row >= b.top && row <= b.bottom && col >= b.left && col <= b.right) return true
+  }
+  return false
+}
+
+/**
+ * Every cell in the multi-selection: the extra committed rectangles plus the
+ * active `selection`, de-duplicated so overlapping ranges aren't visited twice.
+ */
+export function* iterateMultiSelection(
+  sel: Selection,
+  extra: RangeBounds[],
+): Generator<CellRef> {
+  const seen = new Set<string>()
+  const emit = function* (b: RangeBounds): Generator<CellRef> {
+    for (let row = b.top; row <= b.bottom; row++) {
+      for (let col = b.left; col <= b.right; col++) {
+        const k = `${row},${col}`
+        if (seen.has(k)) continue
+        seen.add(k)
+        yield { row, col }
+      }
+    }
+  }
+  for (const b of extra) yield* emit(b)
+  yield* emit(selectionBounds(sel))
+}
+
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
 /**
