@@ -104,6 +104,14 @@ interface StoreState {
 
   applyFormat: (patch: Partial<CellFormat>) => void
   applyBorders: (preset: BorderPreset) => void
+  /** Format painter: the captured source format, or null when inactive. */
+  formatPainter: CellFormat | null
+  /** Arm the format painter from the focused cell (toggles off if already armed). */
+  startFormatPainter: () => void
+  /** Paint the captured format over the current selection, then disarm. */
+  paintFormat: () => void
+  /** Disarm the format painter without applying. */
+  cancelFormatPainter: () => void
   clearSelectedContents: () => void
   /** Set (or clear, when text is empty) the note on a cell. */
   setNote: (row: number, col: number, text: string) => void
@@ -203,6 +211,13 @@ function bump(set: (fn: (s: StoreState) => Partial<StoreState>) => void) {
   set((s) => ({ rev: s.rev + 1 }))
 }
 
+/** Deep-ish clone of a cell format (nested `borders` copied), never undefined —
+ *  an absent source yields an empty `{}` so the caller can treat it as "clear". */
+function cloneFormat(f: CellFormat | undefined): CellFormat {
+  if (!f) return {}
+  return { ...f, ...(f.borders ? { borders: { ...f.borders } } : {}) }
+}
+
 function buildInitial(): { hf: HyperFormula; sheets: SheetMeta[]; activeSheetId: number } {
   const hf = HyperFormula.buildEmpty({ licenseKey: 'gpl-v3' })
   const name = 'Sheet1'
@@ -233,6 +248,7 @@ export const useStore = create<StoreState>((set, get) => {
     rev: 0,
     past: [],
     future: [],
+    formatPainter: null,
 
     activeSheet() {
       const s = get()
@@ -297,6 +313,40 @@ export const useStore = create<StoreState>((set, get) => {
       }
       updateSheet(set, get, sheet.id, { formats })
       bump(set)
+    },
+
+    startFormatPainter() {
+      if (get().formatPainter) {
+        set({ formatPainter: null })
+        return
+      }
+      const { focus } = get().selection
+      // Always store an object (possibly empty) so `null` unambiguously means
+      // "disarmed", even when the source cell has no formatting.
+      set({ formatPainter: cloneFormat(get().activeSheet().formats[key(focus.row, focus.col)]) })
+    },
+
+    paintFormat() {
+      const src = get().formatPainter
+      if (!src) return
+      const isBlank = Object.keys(src).length === 0
+      pushUndo(set, get)
+      const { selection } = get()
+      const sheet = get().activeSheet()
+      const formats = { ...sheet.formats }
+      for (const ref of iterateSelection(selection)) {
+        const k = key(ref.row, ref.col)
+        // Replace (don't merge) so painting a plain cell also clears formatting.
+        if (isBlank) delete formats[k]
+        else formats[k] = cloneFormat(src)
+      }
+      updateSheet(set, get, sheet.id, { formats })
+      set({ formatPainter: null })
+      bump(set)
+    },
+
+    cancelFormatPainter() {
+      set({ formatPainter: null })
     },
 
     applyBorders(preset) {

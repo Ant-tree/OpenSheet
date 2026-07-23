@@ -114,6 +114,12 @@ export default function App() {
         return
       }
 
+      // Escape disarms the format painter (if armed).
+      if (e.key === 'Escape' && useStore.getState().formatPainter) {
+        useStore.getState().cancelFormatPainter()
+        return
+      }
+
       // Keyboard-shortcuts help (F1, or Ctrl/Cmd+/).
       if (e.key === 'F1' || ((e.metaKey || e.ctrlKey) && e.key === '/')) {
         e.preventDefault()

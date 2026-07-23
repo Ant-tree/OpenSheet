@@ -978,6 +978,10 @@ table.grid {
   font-weight: 700;
   color: var(--fg);
 }
+/* Format painter armed: the grid cursor signals a click will paint. */
+.grid-scroll.painter-armed {
+  cursor: copy;
+}
 /* Keyboard-shortcuts help modal */
 .shortcuts-modal {
   background: var(--menu-bg);

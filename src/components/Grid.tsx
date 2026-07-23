@@ -84,6 +84,7 @@ export default function Grid() {
   const editing = useStore((s) => s.editing)
   const activeSheetId = useStore((s) => s.activeSheetId)
   const sheets = useStore((s) => s.sheets)
+  const painterArmed = useStore((s) => s.formatPainter !== null)
   const sheet = useMemo(() => sheets.find((x) => x.id === activeSheetId)!, [sheets, activeSheetId])
 
   // ----- zoom -----
@@ -528,6 +529,10 @@ export default function Grid() {
         fillSource.current = null
         fillTargetRef.current = null
         setFillTarget(null)
+      } else if (dragging.current && useStore.getState().formatPainter) {
+        // Format painter is armed: paint the captured format onto the range the
+        // user just selected (single tap = single cell), then disarm.
+        useStore.getState().paintFormat()
       }
       dragging.current = false
       pointAnchor.current = null // end the drag; the ref stays replaceable until a keystroke
@@ -769,7 +774,7 @@ export default function Grid() {
 
   return (
     <div
-      className="grid-scroll"
+      className={`grid-scroll${painterArmed ? ' painter-armed' : ''}`}
       ref={scrollRef}
       style={gridVars}
       onTouchStart={onTouchStart}

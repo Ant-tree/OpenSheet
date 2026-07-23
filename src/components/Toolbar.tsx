@@ -174,6 +174,8 @@ export default function Toolbar({
   const toggleFilter = useStore((s) => s.toggleFilter)
   const filterActive = useStore((s) => s.filterHeaderRow !== null)
   const applyBorders = useStore((s) => s.applyBorders)
+  const startFormatPainter = useStore((s) => s.startFormatPainter)
+  const painterActive = useStore((s) => s.formatPainter !== null)
   const setFreeze = useStore((s) => s.setFreeze)
   const loadWorkbook = useStore((s) => s.loadWorkbook)
   const newWorkbook = useStore((s) => s.newWorkbook)
@@ -467,6 +469,15 @@ export default function Toolbar({
           onClick={() => toggle('underline')}
         >
           <Icon name="underline" />
+        </button>
+        <button
+          className={`tbtn icon-btn${painterActive ? ' active' : ''}`}
+          title={t('formatPainter')}
+          aria-label={t('formatPainter')}
+          aria-pressed={painterActive}
+          onClick={startFormatPainter}
+        >
+          <Icon name="format-painter" />
         </button>
       </div>
 
