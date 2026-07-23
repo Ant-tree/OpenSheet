@@ -80,15 +80,21 @@ edited elsewhere. `clearCachedDoc()` purges leftover data on launch. On launch:
 desktop reopens the last file fresh from disk (by path); everywhere else starts
 blank and the user opens files directly.
 
-| Platform | Open | Save (in place) | Save As | Recent files |
+Legend: ✅ supported · ❌ not supported (feature/menu item absent).
+
+| Platform | Open | Save in place (write back to opened file) | Save As | Recent files |
 |---|---|---|---|---|
 | **Web Chrome/Edge** | File System Access picker (handle) | ✅ write via handle | `showSaveFilePicker` | ❌ hidden |
-| **Web Safari/FF** | `<input type=file>` | ❌ (download) | prompt + download | ❌ hidden |
+| **Web Safari/FF** | `<input type=file>` | ❌ — Save As downloads a copy | prompt + download | ❌ hidden |
 | **Desktop (Tauri)** | native `open_workbook` (path) | ✅ `save_workbook_to_path` | native `save_workbook_as` dialog | ✅ re-read fresh by path |
-| **Android** | native SAF `openDocument` (persisted URI) | ➖ SAF Save As each time | SAF `ACTION_CREATE_DOCUMENT` | ✅ re-read fresh by URI |
-| **iOS** | `<input type=file>` | ➖ | write to Documents + Share sheet | ❌ hidden |
+| **Android** | native SAF `openDocument` (persisted **read-only** URI) | ❌ — Save As only, SAF `ACTION_CREATE_DOCUMENT` (new file each time) | SAF `ACTION_CREATE_DOCUMENT` | ✅ re-read fresh by URI |
+| **iOS** | `<input type=file>` | ❌ — save writes to app Documents + Share sheet | write to Documents + Share sheet | ❌ hidden |
 
-- "Save in place" menu item shows when `supportsFileSystemAccess() || isTauri()`.
+- **"Save in place" is web-Chromium + desktop only.** On mobile there is no
+  write-back-to-original; the menu item is hidden (`canSaveInPlace =
+  supportsFileSystemAccess() || isTauri()`, both false on mobile) and saving
+  always creates a new file. (Android's persisted open URI is read-only — used
+  for Recent re-reads, not for writing back.)
 - Recent files show only when `isTauri() || nativePlatform()==='android'` (they
   need a persistent reference — path or SAF URI — to re-read the current file).
 - The file path (desktop) is persisted in `localStorage` (`opensheet.filePath`)
