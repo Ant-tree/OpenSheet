@@ -61,14 +61,16 @@ that's an environment limitation, not a code error.
 ## Feature set (current)
 
 Grid & editing: virtualized grid (variable row heights, auto-fit for wrap),
-IME-safe editing, formulas + autocomplete, copy/cut/paste (TSV), undo/redo,
-fill handle + Ctrl+D/R, notes, context menu (insert/delete rows/cols, etc.),
-non-contiguous multi-range selection (Ctrl/⌘-click).
-Formatting: bold/italic/underline, h/v align, wrap, text/fill color, number
-formats (currency/percent/decimals), borders, merge/unmerge, freeze panes,
-format painter.
+IME-safe editing, formulas + autocomplete, copy/cut/paste (TSV) + paste special
+(values only / formatting only, Ctrl+Shift+V), undo/redo, fill handle + Ctrl+D/R,
+notes, context menu (insert/delete rows/cols, etc.), non-contiguous multi-range
+selection (Ctrl/⌘-click).
+Formatting: bold/italic/underline/strikethrough, font size, h/v align, wrap,
+text/fill color, number formats (currency/percent/decimals), borders,
+merge/unmerge, freeze panes, format painter.
 Files/UX: auto-save toggle (in-place platforms), keyboard-shortcuts help (F1).
-Data: sort, AutoFilter, conditional formatting, list data-validation (dropdowns),
+Data: sort, AutoFilter, conditional formatting (cell rules + color scales + data
+bars), data-validation (dropdown lists + TRUE/FALSE checkbox cells),
 charts (bar/line/pie) rendered to SVG and embedded as PNG on export.
 Sheets: multiple sheets + tabs; switch with **Ctrl/Cmd+PageUp/PageDown**; the
 active tab scrolls into view; prev/next tab buttons.
@@ -184,6 +186,19 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Feature: **paste special** — values only / formatting only (context menu +
+  Ctrl+Shift+V for values). Uses the internal copy (rows + formats).
+- Feature: **checkbox cells** — a `kind:'checkbox'` data-validation renders a
+  centered TRUE/FALSE toggle (click / Space / Enter). The boolean value exports
+  to xlsx (booleans now written from the computed value, not the raw text); the
+  checkbox *widget* is OpenSheet-only (Excel shows TRUE/FALSE).
+- Feature: **color scales & data bars** in conditional formatting
+  (`kind:'colorScale'|'dataBar'`, default `'cell'`). Range min/max precomputed in
+  Grid (`condStats`); color scale interpolates the bg, data bar draws a
+  proportional in-cell fill. Exported as native Excel CF (colorScale/dataBar).
+- Feature: **font size + strikethrough** (`CellFormat.fontSize`/`strike`).
+  Font size interacts with row height — `autoRowHeights` grows rows for big
+  fonts and `textMeasure` wraps at the cell's size; px↔pt on xlsx round-trip.
 - Fix (desktop): **saving now updates Recent files.** Save As / "Save as
   xlsx·csv" / Cmd+S all call `addRecentFile` with the path just written; since
   Recent dedups by name, the stale entry is replaced. Before, saving to a new
