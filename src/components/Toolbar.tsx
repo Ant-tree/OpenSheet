@@ -28,6 +28,7 @@ import { printPage } from '../lib/print'
 import {
   NUMBER_FORMAT_PRESETS,
   asCurrency,
+  asCurrencyUsd,
   asPercent,
   decreaseDecimals,
   increaseDecimals,
@@ -631,6 +632,13 @@ export default function Toolbar({
           onClick={() => applyFormat({ numberFormat: asCurrency(active?.numberFormat) })}
         >
           <Icon name="currency" />
+        </button>
+        <button
+          className="tbtn icon-btn"
+          title={t('currencyUsdFmt')}
+          onClick={() => applyFormat({ numberFormat: asCurrencyUsd(active?.numberFormat) })}
+        >
+          <Icon name="currency-usd" />
         </button>
         <button
           className="tbtn icon-btn"

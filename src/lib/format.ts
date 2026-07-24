@@ -141,6 +141,11 @@ export function asCurrency(token?: string): string {
   return `₩#,##0${d > 0 ? '.' + '0'.repeat(d) : ''}`
 }
 
+export function asCurrencyUsd(token?: string): string {
+  const d = currentDecimals(token)
+  return `$#,##0${d > 0 ? '.' + '0'.repeat(d) : ''}`
+}
+
 /** Apply a percent format, keeping the current decimal count. */
 export function asPercent(token?: string): string {
   const d = currentDecimals(token)
