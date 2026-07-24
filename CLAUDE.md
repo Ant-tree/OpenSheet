@@ -185,11 +185,15 @@ off on the web, so web tests confirm no regressions there; native shells
   along the axis resizes and a tap selects. **Decided per-event via
   `e.pointerType`, NOT a `(pointer: coarse)` media query** — Capacitor WebViews
   don't reliably report coarse, which silently killed touch resize on real
-  iOS/Android. `touch-action: pan-y`/`pan-x` on the headers is likewise applied
-  UNCONDITIONALLY (only affects touch input) so a touch-drag resizes instead of
-  scrolling. Edge handlers early-return on non-mouse pointers so the finger
-  falls through to the whole-header drag. E2E covers real touch drags via CDP
-  `Input.dispatchTouchEvent`.
+  iOS/Android. `touch-action: none` on the headers is likewise applied
+  UNCONDITIONALLY (only affects touch input) — NOT `pan-x`/`pan-y`: Android
+  WebView starts a cross-axis pan on the slightest diagonal drag and fires
+  `pointercancel`, which killed the resize on Android while iOS worked. `none`
+  hands all header gestures to us. The only cost is you can't drag-scroll from
+  the header strips themselves (scroll the grid body instead); touch-only,
+  header-only. Edge handlers early-return on non-mouse pointers so the finger
+  falls through to the whole-header drag. E2E covers real touch drags (incl.
+  diagonal) via CDP `Input.dispatchTouchEvent`.
 - Tests: added a committed suite — Vitest unit (`tests/unit`) + Playwright E2E
   (`tests/e2e`, playwright-core + Vite dev server). `npm test` / `test:e2e` /
   `test:all`. See `tests/README.md`.

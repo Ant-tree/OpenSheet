@@ -81,6 +81,16 @@ describe('touch resize (whole header is the grab target)', () => {
     await page.context().close()
   })
 
+  test('a slightly diagonal touch drag still resizes the column', async () => {
+    // The real-device failure mode: a finger drag is never perfectly axis-aligned.
+    // With touch-action:none the cross-axis wobble can't start a pan/cancel.
+    const page = await openTouchApp()
+    const before = await colWidth(page, 1)
+    await touchDragBy(page, '.colhead', 1, 72, 22) // mostly horizontal, some vertical
+    await expect.poll(() => colWidth(page, 1)).toBeGreaterThan(before + 40)
+    await page.context().close()
+  })
+
   test('dragging down a row header resizes that row', async () => {
     const page = await openTouchApp()
     await dragBy(page, 'tr:has(.rowhead) .rowhead', 1, 0, 45)
@@ -100,9 +110,10 @@ describe('touch resize (whole header is the grab target)', () => {
     await page.context().close()
   })
 
-  test('headers declare touch-action so a drag resizes instead of scrolling', async () => {
-    // Applied unconditionally (not behind a coarse media query) because Capacitor
-    // WebViews don't reliably report `(pointer: coarse)`.
+  test('headers declare touch-action:none so a drag never scrolls/cancels', async () => {
+    // `none` (not pan-x/pan-y) — Android WebView starts a cross-axis pan on a
+    // slightly diagonal drag and fires pointercancel, killing the resize.
+    // Applied unconditionally (Capacitor WebViews don't reliably report coarse).
     const page = await openTouchApp()
     const ta = await page.evaluate(() => {
       const col = document.querySelector('.colhead')!
@@ -112,8 +123,8 @@ describe('touch resize (whole header is the grab target)', () => {
         row: getComputedStyle(row).touchAction,
       }
     })
-    expect(ta.col).toBe('pan-y')
-    expect(ta.row).toBe('pan-x')
+    expect(ta.col).toBe('none')
+    expect(ta.row).toBe('none')
     await page.context().close()
   })
 })

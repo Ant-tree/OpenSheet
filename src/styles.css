@@ -614,16 +614,16 @@ table.grid {
 }
 /* Touch: the whole header cell is the resize target (a thin edge handle is
    near-impossible to grab with a finger; see Grid.tsx — drag = resize, tap =
-   select). These `touch-action` rules are applied UNCONDITIONALLY (not behind a
-   `(pointer: coarse)` media query): Capacitor WebViews don't reliably report
-   coarse, and without them a touch-drag on the header scrolls the grid instead
-   of resizing. They only affect touch input, so mouse/desktop is unchanged.
-   Each header keeps its cross-axis free to scroll. */
-.grid .colhead {
-  touch-action: pan-y; /* vertical scroll ok; horizontal drag resizes the column */
-}
+   select). `touch-action: none` (not `pan-y`/`pan-x`) is deliberate: Android
+   WebView starts a cross-axis pan on the slightest diagonal finger movement and
+   fires `pointercancel`, which killed the resize on Android while iOS worked.
+   `none` hands ALL gestures on the header to us, so the resize can never be
+   stolen. Applied UNCONDITIONALLY (Capacitor WebViews don't reliably report
+   `(pointer: coarse)`); it only affects touch input, so mouse/desktop is
+   unchanged. Scrolling still works by dragging the grid body, not the headers. */
+.grid .colhead,
 .grid .rowhead {
-  touch-action: pan-x; /* horizontal scroll ok; vertical drag resizes the row */
+  touch-action: none;
 }
 .colhead-wrap {
   position: relative;
