@@ -331,6 +331,8 @@ export default function Grid() {
   }
 
   const setSelection = useStore((s) => s.setSelection)
+  const jumpSelection = useStore((s) => s.jumpSelection)
+  const selectAll = useStore((s) => s.selectAll)
   const addSelectionRange = useStore((s) => s.addSelectionRange)
   const clearExtraRanges = useStore((s) => s.clearExtraRanges)
   const setEditing = useStore((s) => s.setEditing)
@@ -535,6 +537,30 @@ export default function Grid() {
       }
       return // arrows etc. move the text caret while editing
     }
+    // --- power-user keyboard (Excel-style) ---
+    const mod = e.ctrlKey || e.metaKey
+    // Ctrl/Cmd+A: select the used range.
+    if (mod && (k === 'a' || k === 'A')) {
+      e.preventDefault()
+      selectAll()
+      return
+    }
+    // Ctrl/Cmd+Arrow: jump to the edge of the data block (Shift extends).
+    if (mod && k.startsWith('Arrow')) {
+      e.preventDefault()
+      const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[k]!
+      jumpSelection(d[0], d[1], e.shiftKey)
+      return
+    }
+    // Ctrl+Space selects the whole column(s); Shift+Space the whole row(s).
+    if (k === ' ' && (mod || e.shiftKey)) {
+      e.preventDefault()
+      const b = selectionBounds(selection)
+      if (mod) setSelection({ anchor: { row: 0, col: b.left }, focus: { row: MAX_ROWS - 1, col: b.right } })
+      else setSelection({ anchor: { row: b.top, col: 0 }, focus: { row: b.bottom, col: MAX_COLS - 1 } })
+      return
+    }
+
     // Space toggles a checkbox cell (Enter/double-click do too, via enterEdit).
     if (k === ' ' && isCheckboxCell(selection.focus.row, selection.focus.col)) {
       e.preventDefault()

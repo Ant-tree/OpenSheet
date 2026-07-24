@@ -103,6 +103,10 @@ interface StoreState {
   setSelection: (sel: Selection) => void
   setEditing: (cell: { row: number; col: number } | null) => void
   moveSelection: (dRow: number, dCol: number, extend: boolean) => void
+  /** Excel Ctrl+Arrow: jump the focus to the edge of the current data block. */
+  jumpSelection: (dRow: number, dCol: number, extend: boolean) => void
+  /** Select the used range (Ctrl+A). */
+  selectAll: () => void
   /** Extra committed rectangles for a non-contiguous (Ctrl/Cmd-click) selection.
    *  The active `selection` is the range currently being edited/extended. */
   extraRanges: MergeRange[]
@@ -322,6 +326,54 @@ export const useStore = create<StoreState>((set, get) => {
         // Keyboard navigation collapses back to a single range.
         extraRanges: [],
       })
+    },
+
+    jumpSelection(dRow, dCol, extend) {
+      const s = get()
+      const maxR = MAX_ROWS - 1
+      const maxC = MAX_COLS - 1
+      const filled = (r: number, c: number) => s.getRaw(r, c).trim() !== ''
+      const inB = (r: number, c: number) => r >= 0 && r <= maxR && c >= 0 && c <= maxC
+      let { row, col } = s.selection.focus
+      let r = row + dRow
+      let c = col + dCol
+      if (!inB(r, c)) {
+        // already at the edge — nothing to do
+      } else if (filled(row, col) && filled(r, c)) {
+        // extend to the far end of the contiguous filled block
+        while (inB(r + dRow, c + dCol) && filled(r + dRow, c + dCol)) {
+          r += dRow
+          c += dCol
+        }
+        row = r
+        col = c
+      } else {
+        // skip blanks to the next filled cell, else jump to the sheet edge
+        while (inB(r, c) && !filled(r, c)) {
+          r += dRow
+          c += dCol
+        }
+        if (inB(r, c)) {
+          row = r
+          col = c
+        } else {
+          row = dRow > 0 ? maxR : dRow < 0 ? 0 : row
+          col = dCol > 0 ? maxC : dCol < 0 ? 0 : col
+        }
+      }
+      const focus = { row, col }
+      set({
+        selection: extend ? { anchor: s.selection.anchor, focus } : { anchor: focus, focus },
+        editing: null,
+        extraRanges: [],
+      })
+    },
+
+    selectAll() {
+      const { hf, activeSheetId } = get()
+      const dims = hf.getSheetDimensions(activeSheetId)
+      const focus = { row: Math.max(0, dims.height - 1), col: Math.max(0, dims.width - 1) }
+      set({ selection: { anchor: { row: 0, col: 0 }, focus }, editing: null, extraRanges: [] })
     },
 
     addSelectionRange(cell) {
