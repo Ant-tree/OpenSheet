@@ -64,15 +64,17 @@ that's an environment limitation, not a code error.
 Grid & editing: virtualized grid (variable row heights, auto-fit for wrap),
 IME-safe editing, formulas + autocomplete, copy/cut/paste (TSV) + paste special
 (values only / formatting only, Ctrl+Shift+V), undo/redo, fill handle + Ctrl+D/R,
-notes, context menu (insert/delete rows/cols, etc.), non-contiguous multi-range
-selection (Ctrl/⌘-click).
+notes, cell hyperlinks, context menu (insert/delete/hide/unhide rows/cols, etc.),
+non-contiguous multi-range selection (Ctrl/⌘-click), power-user keyboard nav
+(Ctrl+Arrow jump, Ctrl+A used range, Ctrl/Shift+Space column/row select).
 Formatting: bold/italic/underline/strikethrough, font size, h/v align, wrap,
-text/fill color, number formats (currency ₩ & $ / percent / decimals), borders,
-merge/unmerge, freeze panes, format painter.
+text/fill color, number formats (currency ₩ & $ / percent / decimals + a custom
+format-code input), borders, merge/unmerge, freeze panes, format painter.
 Files/UX: auto-save toggle (in-place platforms), keyboard-shortcuts help (F1).
 Data: sort, AutoFilter, conditional formatting (cell rules + color scales + data
 bars), data-validation (dropdown lists + TRUE/FALSE checkbox cells),
-charts (bar/line/pie) rendered to SVG and embedded as PNG on export.
+charts (bar/line/pie) rendered to SVG and embedded as PNG on export, in-cell
+sparklines (line/column, OpenSheet-only overlay).
 Sheets: multiple sheets + tabs; switch with **Ctrl/Cmd+PageUp/PageDown**; the
 active tab scrolls into view; prev/next tab buttons.
 View: zoom 50–200% (`Ctrl/Cmd +/-/0`, status-bar control), light/dark/auto theme,
@@ -187,6 +189,27 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Feature: **in-cell sparklines** — a `SheetMeta.sparklines[]` overlay (line or
+  column) drawn from a source range. Toolbar "Sparkline" dropdown places one in
+  the cell just past the selection (below a column-shaped range, right of a
+  row-shaped one). Rendered as a stretched inline SVG behind cell text
+  (`Grid.tsx` `sparklineMap` + `SparklineSvg`). OpenSheet-only (not exported to
+  xlsx, like the checkbox widget); persists in the session-restore snapshot.
+- Feature: **cell hyperlinks** — `SheetMeta.links` (URL keyed by "row,col"),
+  Add/Edit/Remove in the context menu, a blue underline + clickable ↗ marker in
+  the grid, opened via `window.open` (bare hosts get `https://`). Round-trips to
+  xlsx as real `{ text, hyperlink }` cell values (`readLink`/export loop in
+  `fileIO.ts`). Links shift with insert/delete rows/cols like notes.
+- Feature: **hide / unhide rows & columns** — `SheetMeta.hiddenRows/hiddenCols`,
+  context-menu items, `visibleRows`/`visibleCols` drive the grid windowing.
+  Round-trips to xlsx (`row.hidden`/`column.hidden`). AutoFilter's hidden rows
+  union with manually-hidden ones.
+- Feature: **custom number-format input** — a toolbar text field to type a raw
+  format code; `formatNumber` in `format.ts` is literal-aware (quoted/escaped
+  prefix & suffix text, section selection, percent ×100).
+- Feature: **power-user keyboard nav** — Ctrl+Arrow jumps to the data-block edge
+  (`jumpSelection`), Ctrl+A selects the used range (`selectAll`), Ctrl+Space /
+  Shift+Space select the whole column / row.
 - Toolbar: currency button icon is now **₩**; added a separate **$ (USD)** button.
   `asCurrency` → `₩#,##0`, `asCurrencyUsd` → `$#,##0` (both keep the cell's decimals).
 - Feature: **paste special** — values only / formatting only (context menu +
