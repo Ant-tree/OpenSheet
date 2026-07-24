@@ -661,6 +661,28 @@ export default function Toolbar({
         >
           <Icon name="decimal-dec" />
         </button>
+        <input
+          // Re-mount per focused cell so it shows that cell's current code.
+          key={`${selection.focus.row}-${selection.focus.col}`}
+          className="numfmt-input"
+          title={t('customFormat')}
+          placeholder={t('customFormat')}
+          defaultValue={
+            active?.numberFormat && active.numberFormat !== 'General' ? active.numberFormat : ''
+          }
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const v = e.currentTarget.value.trim()
+              applyFormat({ numberFormat: v || 'General' })
+            } else if (e.key === 'Escape') {
+              e.currentTarget.blur()
+            }
+          }}
+          onBlur={(e) => {
+            const v = e.currentTarget.value.trim()
+            if (v && v !== (active?.numberFormat ?? '')) applyFormat({ numberFormat: v })
+          }}
+        />
       </div>
 
       <div className="group">

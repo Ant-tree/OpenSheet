@@ -83,36 +83,73 @@ export function formatNumber(value: number, token: string | undefined): string {
     return String(value)
   }
 
-  // Excel codes have up to four sections: positive;negative;zero;text.
-  const section = token.split(';')[0]
-  const cleaned = cleanFormatSection(section)
+  // Excel codes have up to four sections: positive;negative;zero;text. Use the
+  // negative/zero section when present (it carries its own sign), else derive
+  // the sign ourselves from the positive section.
+  const parts = token.split(';')
+  let section: string
+  let autoSign = ''
+  if (value < 0 && parts.length > 1) section = parts[1]
+  else if (value === 0 && parts.length > 2) section = parts[2]
+  else {
+    section = parts[0]
+    autoSign = value < 0 ? '-' : ''
+  }
 
+  const cleaned = cleanFormatSection(section)
   // Date/time codes contain y/m/d/h/s and no numeric placeholders.
   if (/[ymdhs]/i.test(cleaned) && !/[#0]/.test(cleaned)) {
     return formatDate(value, section)
   }
 
   const isPercent = cleaned.includes('%')
-  // Currency symbols are often quoted (e.g. accounting: _-"₩"* #,##0_-), so
-  // detect them on the raw token, not the cleaned one.
-  const currency = CURRENCY_RE.exec(token)?.[0] ?? ''
-  const hasThousands = cleaned.includes(',')
+
+  // Walk the section, splitting literals (quoted / escaped / symbols) from the
+  // numeric placeholder run (# 0 , .). Literals before the run become the
+  // prefix, after it the suffix — so `#,##0 "kg"` → `1,234 kg`, `₩#,##0` →
+  // `₩1,234`, `$0.00` → `$1.23`.
+  const body = section.replace(/\[[^\]]*\]/g, '').replace(/[_*]./g, '')
+  let prefix = ''
+  let suffix = ''
+  let core = ''
+  let seenCore = false
+  const lit = (s: string) => {
+    if (seenCore) suffix += s
+    else prefix += s
+  }
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i]
+    if (ch === '"') {
+      const end = body.indexOf('"', i + 1)
+      lit(body.slice(i + 1, end < 0 ? body.length : end))
+      i = end < 0 ? body.length : end
+    } else if (ch === '\\') {
+      lit(body[i + 1] ?? '')
+      i++
+    } else if (ch === '#' || ch === '0' || ch === ',' || ch === '.') {
+      core += ch
+      seenCore = true
+    } else if (ch !== '%' || !isPercent) {
+      // Any other char is a literal (currency symbols, spaces, text). A `%` that
+      // drives percent mode is emitted below; a stray `%` prints literally.
+      lit(ch)
+    } else {
+      lit('%') // the percent sign shows in place
+    }
+  }
 
   let n = value
   if (isPercent) n = n * 100
 
-  const decimals = decimalsOf(section)
+  const decimals = decimalsOf(core || section)
   let out = Math.abs(n).toFixed(decimals)
-
-  if (hasThousands) {
+  if (core.includes(',')) {
     const [intPart, fracPart] = out.split('.')
     const withSep = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
     out = fracPart ? `${withSep}.${fracPart}` : withSep
   }
 
-  const sign = n < 0 ? '-' : ''
-  const suffix = isPercent ? '%' : ''
-  return `${sign}${currency}${out}${suffix}`
+  return `${autoSign}${prefix}${out}${suffix}`
 }
 
 function currentDecimals(token?: string): number {

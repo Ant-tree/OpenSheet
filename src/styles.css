@@ -238,6 +238,21 @@ body {
   width: 52px;
   text-align: center;
 }
+.numfmt-input {
+  height: 28px;
+  width: 110px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--cell-bg);
+  color: var(--fg);
+  font-size: 12px;
+  padding: 0 8px;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+}
+.numfmt-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 .color-field {
   display: inline-flex;
   flex-direction: column;
