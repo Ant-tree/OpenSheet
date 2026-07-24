@@ -172,11 +172,13 @@ off on the web, so web tests confirm no regressions there; native shells
   unaffected. `main.tsx` unregisters any worker + clears caches a prior version
   left, so existing web installs shed the old precache. Dropped orphaned
   `public/pwa-*.png` icons.
-- Grid: **touch/mouse drag-resize** for columns AND rows via Pointer Events
-  (`touch-action: none` on the handles so a touch-drag resizes, not scrolls).
-  Row headers gained a bottom-edge resize handle. Handles sit *inside* the
-  header cell (parent `overflow: hidden` clips — and makes un-hittable — any
-  overhang), fatter hit target on coarse pointers.
+- Grid: **drag-resize** for columns AND rows via Pointer Events. Desktop (fine
+  pointer) uses thin edge handles inside the header cell (parent `overflow:
+  hidden` clips — and makes un-hittable — any overhang). Touch (coarse pointer)
+  instead makes the **whole header** the grab target — a thin edge handle is
+  near-impossible to finger — where a drag along the axis resizes and a tap
+  selects; `touch-action: pan-y`/`pan-x` on the headers reserves the resize axis
+  and leaves the cross-axis for scrolling. Edge handles are hidden on coarse.
 - Tests: added a committed suite — Vitest unit (`tests/unit`) + Playwright E2E
   (`tests/e2e`, playwright-core + Vite dev server). `npm test` / `test:e2e` /
   `test:all`. See `tests/README.md`.

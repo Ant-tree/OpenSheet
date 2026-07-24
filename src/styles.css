@@ -612,13 +612,20 @@ table.grid {
   z-index: 5;
   touch-action: none;
 }
-/* Fatter, finger-friendly grab targets on touch devices. */
+/* Touch: the thin edge handles are near-impossible to grab with a finger, so
+   the whole header cell becomes the resize target (drag = resize, tap = select;
+   see Grid.tsx). Hide the edge handles and hand each header its resize axis
+   while leaving the cross-axis free to scroll. */
 @media (pointer: coarse) {
-  .col-resize {
-    width: 16px;
-  }
+  .col-resize,
   .row-resize {
-    height: 16px;
+    display: none;
+  }
+  .grid .colhead {
+    touch-action: pan-y; /* vertical scroll ok; horizontal drag resizes the column */
+  }
+  .grid .rowhead {
+    touch-action: pan-x; /* horizontal scroll ok; vertical drag resizes the row */
   }
 }
 .colhead-wrap {

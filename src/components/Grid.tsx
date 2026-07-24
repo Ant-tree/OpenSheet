@@ -663,6 +663,57 @@ export default function Grid() {
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', up)
   }
+  // Touch: the whole header cell is the resize target — a thin edge handle is
+  // near-impossible to grab with a finger (and on Android a stray touch scrolls
+  // instead). Drag along the axis resizes; a tap (no drag) selects the row/col.
+  // `touch-action` (CSS) reserves the cross-axis for scrolling and hands the
+  // resize axis to us, so a pan the other way still scrolls the grid.
+  const onColHeaderPointerDown = (col: number, e: React.PointerEvent) => {
+    if (!IS_COARSE) return
+    const startX = e.clientX
+    const startW = sheet.colWidths[col] ?? DEFAULT_COL_WIDTH
+    let resizing = false
+    const move = (ev: PointerEvent) => {
+      if (!resizing && Math.abs(ev.clientX - startX) > 6) resizing = true
+      if (resizing) setColWidth(col, startW + (ev.clientX - startX) / zoom)
+    }
+    const cleanup = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', cleanup)
+    }
+    const onUp = () => {
+      cleanup()
+      // A tap (never crossed the drag threshold) selects the whole column.
+      if (!resizing) setSelection({ anchor: { row: 0, col }, focus: { row: MAX_ROWS - 1, col } })
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', cleanup) // e.g. cross-axis scroll took over
+  }
+  const onRowHeaderPointerDown = (row: number, e: React.PointerEvent) => {
+    if (!IS_COARSE) return
+    const startY = e.clientY
+    const startH = rowHeightUnscaled(row)
+    let resizing = false
+    const move = (ev: PointerEvent) => {
+      if (!resizing && Math.abs(ev.clientY - startY) > 6) resizing = true
+      if (resizing) setRowHeight(row, startH + (ev.clientY - startY) / zoom)
+    }
+    const cleanup = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', cleanup)
+    }
+    const onUp = () => {
+      cleanup()
+      if (!resizing)
+        setSelection({ anchor: { row, col: 0 }, focus: { row, col: MAX_COLS - 1 } })
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', cleanup)
+  }
   const onRowResizeDown = (row: number, e: React.PointerEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -891,12 +942,14 @@ export default function Grid() {
                       }
                     : undefined
                 }
-                onMouseDown={() =>
+                onPointerDown={(e) => onColHeaderPointerDown(c, e)}
+                onMouseDown={() => {
+                  if (IS_COARSE) return // touch selects on tap via the pointer handler
                   setSelection({
                     anchor: { row: 0, col: c },
                     focus: { row: MAX_ROWS - 1, col: c },
                   })
-                }
+                }}
               >
                 <div className="colhead-wrap">
                   {colToLetter(c)}
@@ -942,12 +995,14 @@ export default function Grid() {
                       }
                     : { height: rh }
                 }
-                onMouseDown={() =>
+                onPointerDown={(e) => onRowHeaderPointerDown(r, e)}
+                onMouseDown={() => {
+                  if (IS_COARSE) return // touch selects on tap via the pointer handler
                   setSelection({
                     anchor: { row: r, col: 0 },
                     focus: { row: r, col: MAX_COLS - 1 },
                   })
-                }
+                }}
               >
                 {r + 1}
                 <div
