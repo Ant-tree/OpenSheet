@@ -12,7 +12,7 @@ import { borderCss, displayValue, strongerBorder } from '../lib/format'
 import { condStyleFor, rangeNumericStats, type DataBar } from '../lib/condFormat'
 import { colToLetter, isInAnyRange, isInSelection, key, selectionBounds } from '../lib/utils'
 import { wrappedLineCount, BASE_FONT_SIZE } from '../lib/textMeasure'
-import type { BorderSide, CellBorders, CellFormat, CellRef, MergeRange } from '../types'
+import type { BorderSide, CellBorders, CellFormat, CellRef, MergeRange, Sparkline } from '../types'
 import { useZoomStore } from '../zoom'
 import ContextMenu from './ContextMenu'
 import { FormulaAutocomplete, type FormulaACHandle } from './FormulaAutocomplete'
@@ -33,6 +33,44 @@ const isAdditiveClick = (e: React.MouseEvent) => (IS_MAC ? e.metaKey : e.ctrlKey
 function openLink(url: string) {
   const href = /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`
   window.open(href, '_blank', 'noopener,noreferrer')
+}
+
+/** Render a sparkline as an inline SVG that fills the cell. The viewBox is
+ *  100×30 with `preserveAspectRatio: none`, so the chart stretches to the cell
+ *  regardless of its pixel size. */
+function SparklineSvg({ values, type, color }: { values: number[]; type: 'line' | 'bar'; color: string }) {
+  const W = 100
+  const H = 30
+  const pad = 2
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const y = (v: number) => H - pad - ((v - min) / span) * (H - 2 * pad)
+  const common = { className: 'sparkline', viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none' as const }
+  if (type === 'bar') {
+    const n = values.length
+    const gap = n > 1 ? 1.5 : 0
+    const bw = (W - gap * (n - 1)) / n
+    const base = H - pad
+    return (
+      <svg {...common}>
+        {values.map((v, i) => {
+          const top = y(v)
+          return (
+            <rect key={i} x={i * (bw + gap)} y={top} width={bw} height={Math.max(base - top, 0.5)} fill={color} />
+          )
+        })}
+      </svg>
+    )
+  }
+  const n = values.length
+  const x = (i: number) => (n > 1 ? pad + (i / (n - 1)) * (W - 2 * pad) : W / 2)
+  const pts = values.map((v, i) => `${x(i)},${y(v)}`).join(' ')
+  return (
+    <svg {...common}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
 }
 
 /**
@@ -306,6 +344,23 @@ export default function Grid() {
     return m
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rev, activeSheetId, sheet.condFormats])
+  // Sparklines keyed by target "row,col", each with its live numeric values read
+  // from the source range (non-numbers skipped).
+  const sparklineMap = useMemo(() => {
+    const m = new Map<string, { spark: Sparkline; values: number[] }>()
+    for (const spark of sheet.sparklines ?? []) {
+      const values: number[] = []
+      for (let r = spark.range.top; r <= spark.range.bottom; r++) {
+        for (let c = spark.range.left; c <= spark.range.right; c++) {
+          const v = useStore.getState().getComputed(r, c)
+          if (typeof v === 'number' && Number.isFinite(v)) values.push(v)
+        }
+      }
+      if (values.length) m.set(key(spark.row, spark.col), { spark, values })
+    }
+    return m
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rev, activeSheetId, sheet.sparklines])
   const cellContent = (r: number, c: number, k: string, merge: MergeRange | undefined) => {
     const cached = contentCache.current.get(k)
     if (cached) return cached
@@ -1156,6 +1211,7 @@ export default function Grid() {
                 const fmt = sheet.formats[k]
                 const note = sheet.notes[k]
                 const link = sheet.links?.[k]
+                const spark = sparklineMap.get(k)
                 const isFilterHeader = filterHeaderRow === r && filterCols.includes(c)
                 const hasColFilter = !!columnFilters[c]
                 const content = cellContent(r, c, k, merge)
@@ -1170,7 +1226,7 @@ export default function Grid() {
                 }
                 const dataBar = content.dataBar
                 const checkbox = content.checkbox
-                if (isFillCorner || note || link || isFilterHeader || dataBar || checkbox)
+                if (isFillCorner || note || link || spark || isFilterHeader || dataBar || checkbox)
                   style.position = 'relative'
                 const frozenR = r < frozenRows
                 const frozenC = c < frozenCols
@@ -1204,6 +1260,13 @@ export default function Grid() {
                       <div
                         className="data-bar"
                         style={{ width: `${dataBar.pct}%`, background: dataBar.color }}
+                      />
+                    )}
+                    {spark && (
+                      <SparklineSvg
+                        values={spark.values}
+                        type={spark.spark.type}
+                        color={spark.spark.color ?? 'var(--accent)'}
                       />
                     )}
                     {checkbox && (

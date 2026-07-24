@@ -111,6 +111,19 @@ export interface ChartSpec {
   data: ChartData
 }
 
+/**
+ * A tiny in-cell chart drawn from a source data range. Lives in one target cell
+ * ({row, col}); the values are read live from `range` on each render. This is an
+ * OpenSheet-only overlay (not written to `.xlsx`).
+ */
+export interface Sparkline {
+  row: number
+  col: number
+  range: MergeRange
+  type: 'line' | 'bar'
+  color?: string
+}
+
 export interface SheetMeta {
   id: number
   name: string
@@ -135,4 +148,6 @@ export interface SheetMeta {
   /** Manually hidden row / column indices. */
   hiddenRows?: number[]
   hiddenCols?: number[]
+  /** In-cell sparklines (OpenSheet-only overlay). */
+  sparklines?: Sparkline[]
 }

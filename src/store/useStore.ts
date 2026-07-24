@@ -10,6 +10,7 @@ import type {
   MergeRange,
   Selection,
   SheetMeta,
+  Sparkline,
 } from '../types'
 import {
   iterateMultiSelection,
@@ -45,6 +46,7 @@ export interface SerializedDoc {
     frozenCols: number
     hiddenRows?: number[]
     hiddenCols?: number[]
+    sparklines?: Sparkline[]
     charts?: ChartSpec[]
   }[]
 }
@@ -135,6 +137,11 @@ interface StoreState {
   setNote: (row: number, col: number, text: string) => void
   /** Set (or clear, when url is empty) the hyperlink on a cell. */
   setLink: (row: number, col: number, url: string) => void
+  /** Add a sparkline over the current selection's data range (placed in the
+   *  cell just past the range), replacing any existing one at that cell. */
+  addSparkline: (type: 'line' | 'bar') => void
+  /** Remove the sparkline anchored at (row, col), if any. */
+  removeSparkline: (row: number, col: number) => void
   /** Append a conditional-formatting rule to the active sheet. */
   addCondFormat: (rule: CondFormatRule) => void
   /** Remove all conditional-formatting rules from the active sheet. */
@@ -527,6 +534,37 @@ export const useStore = create<StoreState>((set, get) => {
       bump(set)
     },
 
+    addSparkline(type) {
+      const sheet = get().activeSheet()
+      const b = selectionBounds(get().selection)
+      // Place the sparkline just past the range along its longer axis: below a
+      // taller-than-wide range, to the right of a wider one.
+      const tall = b.bottom - b.top >= b.right - b.left
+      const target: CellRef = tall
+        ? { row: b.bottom + 1, col: b.left }
+        : { row: b.top, col: b.right + 1 }
+      const spark: Sparkline = { row: target.row, col: target.col, range: { ...b }, type }
+      const existing = (sheet.sparklines ?? []).filter(
+        (s) => s.row !== target.row || s.col !== target.col,
+      )
+      pushUndo(set, get)
+      updateSheet(set, get, sheet.id, { sparklines: [...existing, spark] })
+      set((s) => ({
+        selection: { anchor: { ...target }, focus: { ...target } },
+        rev: s.rev + 1,
+      }))
+    },
+
+    removeSparkline(row, col) {
+      const sheet = get().activeSheet()
+      if (!sheet.sparklines?.length) return
+      const kept = sheet.sparklines.filter((s) => s.row !== row || s.col !== col)
+      if (kept.length === sheet.sparklines.length) return
+      pushUndo(set, get)
+      updateSheet(set, get, sheet.id, { sparklines: kept.length ? kept : undefined })
+      bump(set)
+    },
+
     addCondFormat(rule) {
       pushUndo(set, get)
       const sheet = get().activeSheet()
@@ -893,6 +931,7 @@ export const useStore = create<StoreState>((set, get) => {
           frozenCols: m.frozenCols,
           hiddenRows: m.hiddenRows,
           hiddenCols: m.hiddenCols,
+          sparklines: m.sparklines,
           charts: charts[m.id] ?? [],
         })),
       }
@@ -918,6 +957,7 @@ export const useStore = create<StoreState>((set, get) => {
         frozenCols: s.frozenCols ?? 0,
         hiddenRows: s.hiddenRows?.length ? s.hiddenRows : undefined,
         hiddenCols: s.hiddenCols?.length ? s.hiddenCols : undefined,
+        sparklines: s.sparklines?.length ? s.sparklines : undefined,
       }))
       const chartsBySheet: Record<number, ChartSpec[]> = {}
       data.sheets.forEach((s, i) => {
@@ -1410,6 +1450,9 @@ function cloneMeta(m: SheetMeta): SheetMeta {
     rowHeights: { ...m.rowHeights },
     frozenRows: m.frozenRows,
     frozenCols: m.frozenCols,
+    sparklines: m.sparklines
+      ? m.sparklines.map((s) => ({ ...s, range: { ...s.range } }))
+      : undefined,
     hiddenRows: m.hiddenRows ? [...m.hiddenRows] : undefined,
     hiddenCols: m.hiddenCols ? [...m.hiddenCols] : undefined,
   }

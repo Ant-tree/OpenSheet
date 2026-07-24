@@ -181,6 +181,8 @@ export default function Toolbar({
   const autoSave = useSettingsStore((s) => s.autoSave)
   const toggleAutoSave = useSettingsStore((s) => s.toggleAutoSave)
   const setFreeze = useStore((s) => s.setFreeze)
+  const addSparkline = useStore((s) => s.addSparkline)
+  const removeSparkline = useStore((s) => s.removeSparkline)
   const loadWorkbook = useStore((s) => s.loadWorkbook)
   const newWorkbook = useStore((s) => s.newWorkbook)
   const setFileHandle = useStore((s) => s.setFileHandle)
@@ -749,6 +751,28 @@ export default function Toolbar({
           <Icon name="chart" />
           {t('chart')}
         </button>
+        <Dropdown
+          title={t('sparklineHint')}
+          trigger={
+            <>
+              <Icon name="chart" />
+              {t('sparkline')}
+            </>
+          }
+        >
+          <button className="menu-item" onClick={() => addSparkline('line')}>
+            {t('sparklineLine')}
+          </button>
+          <button className="menu-item" onClick={() => addSparkline('bar')}>
+            {t('sparklineBar')}
+          </button>
+          <button
+            className="menu-item"
+            onClick={() => removeSparkline(selection.focus.row, selection.focus.col)}
+          >
+            {t('sparklineRemove')}
+          </button>
+        </Dropdown>
         <button className="tbtn" title={t('dataValidation')} onClick={onOpenValidation}>
           <Icon name="chevron-down" />
           {t('dataValidation')}
