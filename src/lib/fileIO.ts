@@ -896,7 +896,9 @@ export function buildWorkbook(
         } else if (format === 'csv') {
           cell.value = toCsvValue(computed)
         } else if (serialized !== null && serialized !== undefined && serialized !== '') {
-          cell.value = serialized as ExcelJS.CellValue
+          // Booleans (e.g. checkbox cells stored as TRUE/FALSE) export as real
+          // booleans, not the literal text, so they round-trip as TRUE/FALSE.
+          cell.value = (typeof computed === 'boolean' ? computed : serialized) as ExcelJS.CellValue
         }
 
         if (format === 'xlsx' && fmt) applyFormatToCell(cell, fmt)
@@ -1090,7 +1092,9 @@ function writeDataValidations(ws: ExcelJS.Worksheet, validations: DataValidation
     dataValidations: { add: (ref: string, rule: Record<string, unknown>) => void }
   }).dataValidations
   for (const v of validations) {
-    if (!v.values.length) continue
+    // Checkbox validations have no value list and no Excel equivalent — their
+    // TRUE/FALSE cell values still export as booleans.
+    if (!v.values?.length) continue
     dv.add(encodeA1Range(v.range), {
       type: 'list',
       allowBlank: true,

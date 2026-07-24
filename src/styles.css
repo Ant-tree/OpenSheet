@@ -510,6 +510,28 @@ table.grid {
   position: relative;
   z-index: 1; /* keep text above the data bar */
 }
+/* Checkbox data-validation cell: a small centered clickable toggle (kept small
+   so clicking elsewhere in the cell still selects it rather than toggling). */
+.cell-checkbox {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--fg);
+  cursor: pointer;
+  user-select: none;
+  z-index: 2;
+}
+.cell-checkbox.on {
+  color: var(--accent);
+}
 /* Wrapped-cell body: multi-line text clipped to the (auto-grown) row height. */
 .cell-wrap {
   white-space: normal;

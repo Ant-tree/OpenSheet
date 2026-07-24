@@ -131,6 +131,8 @@ interface StoreState {
   clearCondFormats: () => void
   /** Add a list data-validation (dropdown) over the current selection. */
   addDataValidation: (values: string[]) => void
+  /** Turn the current selection into TRUE/FALSE checkbox cells. */
+  addCheckboxValidation: () => void
   /** Remove data-validations overlapping the current selection. */
   clearDataValidations: () => void
   /** The dropdown values for a cell, if it has a list validation. */
@@ -458,7 +460,27 @@ export const useStore = create<StoreState>((set, get) => {
       const range: MergeRange = { top: b.top, left: b.left, bottom: b.bottom, right: b.right }
       // Drop existing validations that overlap the new range.
       const kept = sheet.dataValidations.filter((v) => !overlaps(v.range, range))
-      updateSheet(set, get, sheet.id, { dataValidations: [...kept, { range, values: clean }] })
+      updateSheet(set, get, sheet.id, { dataValidations: [...kept, { range, kind: 'list', values: clean }] })
+      bump(set)
+    },
+
+    addCheckboxValidation() {
+      pushUndo(set, get)
+      const sheet = get().activeSheet()
+      const b = selectionBounds(get().selection)
+      const range: MergeRange = { top: b.top, left: b.left, bottom: b.bottom, right: b.right }
+      const kept = sheet.dataValidations.filter((v) => !overlaps(v.range, range))
+      updateSheet(set, get, sheet.id, { dataValidations: [...kept, { range, kind: 'checkbox' }] })
+      // Blank cells start unchecked (FALSE) so the box renders immediately.
+      const { hf, activeSheetId } = get()
+      for (let r = range.top; r <= range.bottom; r++) {
+        for (let c = range.left; c <= range.right; c++) {
+          const cur = hf.getCellSerialized({ sheet: activeSheetId, row: r, col: c })
+          if (cur === null || cur === undefined || cur === '') {
+            hf.setCellContents({ sheet: activeSheetId, row: r, col: c }, false)
+          }
+        }
+      }
       bump(set)
     },
 
@@ -1169,7 +1191,11 @@ function cloneMeta(m: SheetMeta): SheetMeta {
     formats: structuredClone(m.formats),
     notes: { ...m.notes },
     condFormats: m.condFormats.map((r) => ({ ...r, range: { ...r.range } })),
-    dataValidations: m.dataValidations.map((v) => ({ range: { ...v.range }, values: [...v.values] })),
+    dataValidations: m.dataValidations.map((v) => ({
+      range: { ...v.range },
+      kind: v.kind,
+      values: v.values ? [...v.values] : undefined,
+    })),
     merges: m.merges.map((x) => ({ ...x })),
     colWidths: { ...m.colWidths },
     rowHeights: { ...m.rowHeights },

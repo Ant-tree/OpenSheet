@@ -71,7 +71,9 @@ export interface CondFormatRule {
 /** A list data-validation: cells in `range` accept only one of `values` (dropdown). */
 export interface DataValidation {
   range: MergeRange
-  values: string[]
+  /** 'list' = dropdown of `values` (default); 'checkbox' = TRUE/FALSE toggle. */
+  kind?: 'list' | 'checkbox'
+  values?: string[]
 }
 
 /** A cell coordinate within a sheet (0-based). */

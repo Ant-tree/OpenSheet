@@ -124,10 +124,33 @@ export default function Grid() {
     for (let i = sheet.dataValidations.length - 1; i >= 0; i--) {
       const v = sheet.dataValidations[i]
       const R = v.range
-      if (row >= R.top && row <= R.bottom && col >= R.left && col <= R.right) return v.values
+      if (row >= R.top && row <= R.bottom && col >= R.left && col <= R.right) {
+        // Checkbox cells render an inline toggle, not the list dropdown.
+        return (v.kind ?? 'list') === 'checkbox' ? undefined : v.values
+      }
     }
     return undefined
   }, [sheet.dataValidations, selection.focus])
+  // True if (row,col) is inside a checkbox data-validation.
+  const isCheckboxCell = useCallback(
+    (row: number, col: number) =>
+      sheet.dataValidations.some(
+        (v) =>
+          (v.kind ?? 'list') === 'checkbox' &&
+          row >= v.range.top &&
+          row <= v.range.bottom &&
+          col >= v.range.left &&
+          col <= v.range.right,
+      ),
+    [sheet.dataValidations],
+  )
+  const toggleCheckbox = useCallback(
+    (row: number, col: number) => {
+      const checked = useStore.getState().getComputed(row, col) === true
+      useStore.getState().setCellContent(row, col, checked ? 'FALSE' : 'TRUE')
+    },
+    [],
+  )
   const [dvOpen, setDvOpen] = useState<{ x: number; y: number } | null>(null)
 
   // ----- row virtualization -----
@@ -241,7 +264,10 @@ export default function Grid() {
   // active sheet changes (switching sheets does not bump `rev`) — otherwise the
   // grid keeps showing the previous sheet's cell values.
   const contentCache = useRef(
-    new Map<string, { text: string; isNum: boolean; contentStyle: React.CSSProperties; dataBar?: DataBar }>(),
+    new Map<
+      string,
+      { text: string; isNum: boolean; contentStyle: React.CSSProperties; dataBar?: DataBar; checkbox?: { checked: boolean } }
+    >(),
   )
   const contentRev = useRef(-1)
   const contentSheet = useRef(-1)
@@ -298,7 +324,8 @@ export default function Grid() {
     if (bd.left) contentStyle.borderLeft = borderCss(bd.left)
     if (bd.bottom) contentStyle.borderBottom = borderCss(bd.bottom)
     if (bd.right) contentStyle.borderRight = borderCss(bd.right)
-    const res = { text, isNum, contentStyle, dataBar }
+    const checkbox = isCheckboxCell(r, c) ? { checked: computed === true } : undefined
+    const res = { text, isNum, contentStyle, dataBar, checkbox }
     contentCache.current.set(k, res)
     return res
   }
@@ -374,11 +401,16 @@ export default function Grid() {
 
   const enterEdit = useCallback(
     (row: number, col: number) => {
+      // Checkbox cells aren't text-editable — a double-click/Enter toggles them.
+      if (isCheckboxCell(row, col)) {
+        toggleCheckbox(row, col)
+        return
+      }
       // Seed the uncontrolled input once it mounts for the editing cell.
       pendingInit.current = useStore.getState().getRaw(row, col)
       setEditing({ row, col })
     },
-    [setEditing],
+    [setEditing, isCheckboxCell, toggleCheckbox],
   )
 
   const commitEdit = useCallback(
@@ -502,6 +534,12 @@ export default function Grid() {
         cancelEdit()
       }
       return // arrows etc. move the text caret while editing
+    }
+    // Space toggles a checkbox cell (Enter/double-click do too, via enterEdit).
+    if (k === ' ' && isCheckboxCell(selection.focus.row, selection.focus.col)) {
+      e.preventDefault()
+      toggleCheckbox(selection.focus.row, selection.focus.col)
+      return
     }
     // Navigation mode (input is empty; printable keys fall through to onChange).
     if (k === 'ArrowUp') {
@@ -1087,7 +1125,8 @@ export default function Grid() {
                   style.lineHeight = Math.round(fmt.fontSize * 1.3 * zoom) + 'px'
                 }
                 const dataBar = content.dataBar
-                if (isFillCorner || note || isFilterHeader || dataBar) style.position = 'relative'
+                const checkbox = content.checkbox
+                if (isFillCorner || note || isFilterHeader || dataBar || checkbox) style.position = 'relative'
                 const frozenR = r < frozenRows
                 const frozenC = c < frozenCols
                 if (frozenR || frozenC) {
@@ -1122,9 +1161,26 @@ export default function Grid() {
                         style={{ width: `${dataBar.pct}%`, background: dataBar.color }}
                       />
                     )}
+                    {checkbox && (
+                      <span
+                        className={`cell-checkbox${checkbox.checked ? ' on' : ''}`}
+                        role="checkbox"
+                        aria-checked={checkbox.checked}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleCheckbox(r, c)
+                        }}
+                      >
+                        {checkbox.checked ? '☑' : '☐'}
+                      </span>
+                    )}
                     {isActive ? (
                       <>
-                        {!isEditing && (
+                        {!isEditing && !checkbox && (
                           <span
                             className="cell-text"
                             style={
@@ -1161,7 +1217,7 @@ export default function Grid() {
                           </button>
                         )}
                       </>
-                    ) : fmt?.wrap ? (
+                    ) : checkbox ? null : fmt?.wrap ? (
                       <div className="cell-wrap" style={{ maxHeight: rh }}>
                         {text}
                       </div>

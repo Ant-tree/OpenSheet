@@ -17,6 +17,10 @@ export default function DataValidationPanel({ onClose }: { onClose: () => void }
     useStore.getState().clearDataValidations()
     onClose()
   }
+  const checkbox = () => {
+    useStore.getState().addCheckboxValidation()
+    onClose()
+  }
 
   return (
     <div className="find-panel">
@@ -35,6 +39,9 @@ export default function DataValidationPanel({ onClose }: { onClose: () => void }
         />
         <button className="tbtn find-btn" onClick={apply}>
           {t('dvApply')}
+        </button>
+        <button className="tbtn find-btn" onClick={checkbox}>
+          {t('dvCheckbox')}
         </button>
         <button className="tbtn find-btn" onClick={clear}>
           {t('dvClear')}
