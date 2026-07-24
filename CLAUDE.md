@@ -178,13 +178,18 @@ off on the web, so web tests confirm no regressions there; native shells
   unaffected. `main.tsx` unregisters any worker + clears caches a prior version
   left, so existing web installs shed the old precache. Dropped orphaned
   `public/pwa-*.png` icons.
-- Grid: **drag-resize** for columns AND rows via Pointer Events. Desktop (fine
-  pointer) uses thin edge handles inside the header cell (parent `overflow:
-  hidden` clips — and makes un-hittable — any overhang). Touch (coarse pointer)
-  instead makes the **whole header** the grab target — a thin edge handle is
-  near-impossible to finger — where a drag along the axis resizes and a tap
-  selects; `touch-action: pan-y`/`pan-x` on the headers reserves the resize axis
-  and leaves the cross-axis for scrolling. Edge handles are hidden on coarse.
+- Grid: **drag-resize** for columns AND rows via Pointer Events. Mouse uses thin
+  edge handles inside the header cell (parent `overflow: hidden` clips — and
+  makes un-hittable — any overhang). Touch/pen makes the **whole header** the
+  grab target — a thin edge handle is near-impossible to finger — where a drag
+  along the axis resizes and a tap selects. **Decided per-event via
+  `e.pointerType`, NOT a `(pointer: coarse)` media query** — Capacitor WebViews
+  don't reliably report coarse, which silently killed touch resize on real
+  iOS/Android. `touch-action: pan-y`/`pan-x` on the headers is likewise applied
+  UNCONDITIONALLY (only affects touch input) so a touch-drag resizes instead of
+  scrolling. Edge handlers early-return on non-mouse pointers so the finger
+  falls through to the whole-header drag. E2E covers real touch drags via CDP
+  `Input.dispatchTouchEvent`.
 - Tests: added a committed suite — Vitest unit (`tests/unit`) + Playwright E2E
   (`tests/e2e`, playwright-core + Vite dev server). `npm test` / `test:e2e` /
   `test:all`. See `tests/README.md`.

@@ -45,11 +45,38 @@ const colWidth = (page: Page, c: number) =>
 const rowHeight = (page: Page, r: number) =>
   page.evaluate((r) => (window as any).store.getState().activeSheet().rowHeights[r] ?? null, r)
 
+// A real finger drag (pointerType 'touch') via CDP — unlike page.mouse, which is
+// always pointerType 'mouse'. This exercises the actual on-device code path
+// (the resize is gated on `pointerType !== 'mouse'`, not just a media query).
+async function touchDragBy(page: Page, selector: string, nth: number, dx: number, dy: number) {
+  const box = await page.locator(selector).nth(nth).boundingBox()
+  if (!box) throw new Error(`no box for ${selector}`)
+  const cx = box.x + box.width / 2
+  const cy = box.y + box.height / 2
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] })
+  for (let i = 1; i <= 6; i++) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: cx + (dx * i) / 6, y: cy + (dy * i) / 6 }],
+    })
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+}
+
 describe('touch resize (whole header is the grab target)', () => {
   test('dragging anywhere across a column header resizes that column', async () => {
     const page = await openTouchApp()
     const before = await colWidth(page, 1)
     await dragBy(page, '.colhead', 1, 70, 0) // drag from the header's center
+    await expect.poll(() => colWidth(page, 1)).toBeGreaterThan(before + 40)
+    await page.context().close()
+  })
+
+  test('a real touch drag (pointerType=touch) resizes the column', async () => {
+    const page = await openTouchApp()
+    const before = await colWidth(page, 1)
+    await touchDragBy(page, '.colhead', 1, 72, 0)
     await expect.poll(() => colWidth(page, 1)).toBeGreaterThan(before + 40)
     await page.context().close()
   })
@@ -73,14 +100,20 @@ describe('touch resize (whole header is the grab target)', () => {
     await page.context().close()
   })
 
-  test('the thin edge handles are hidden on touch', async () => {
+  test('headers declare touch-action so a drag resizes instead of scrolling', async () => {
+    // Applied unconditionally (not behind a coarse media query) because Capacitor
+    // WebViews don't reliably report `(pointer: coarse)`.
     const page = await openTouchApp()
-    const visible = await page.evaluate(() => {
-      const el = document.querySelector('.col-resize')
-      if (!el) return false
-      return getComputedStyle(el).display !== 'none'
+    const ta = await page.evaluate(() => {
+      const col = document.querySelector('.colhead')!
+      const row = document.querySelector('.rowhead')!
+      return {
+        col: getComputedStyle(col).touchAction,
+        row: getComputedStyle(row).touchAction,
+      }
     })
-    expect(visible).toBe(false)
+    expect(ta.col).toBe('pan-y')
+    expect(ta.row).toBe('pan-x')
     await page.context().close()
   })
 })

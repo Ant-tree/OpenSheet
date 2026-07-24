@@ -646,6 +646,9 @@ export default function Grid() {
   // finger/cursor leaves the thin handle, and `touch-action: none` (CSS) stops a
   // touch-drag on the handle from scrolling the grid instead of resizing.
   const onColResizeDown = (col: number, e: React.PointerEvent) => {
+    // Mouse only — touch/pen fall through to the whole-header drag on the parent
+    // (so the thin edge handle never swallows a finger tap on the header).
+    if (e.pointerType !== 'mouse') return
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
@@ -668,8 +671,18 @@ export default function Grid() {
   // instead). Drag along the axis resizes; a tap (no drag) selects the row/col.
   // `touch-action` (CSS) reserves the cross-axis for scrolling and hands the
   // resize axis to us, so a pan the other way still scrolls the grid.
+  // Whole-header resize is used for touch/pen (and any coarse-pointer device),
+  // decided per-event via `pointerType` rather than a global media query —
+  // Capacitor WebViews don't always report `(pointer: coarse)`, which used to
+  // silently disable this on real phones. Mouse keeps click-to-select + the thin
+  // edge handle.
+  const wantsHeaderDrag = (e: React.PointerEvent) => IS_COARSE || e.pointerType !== 'mouse'
   const onColHeaderPointerDown = (col: number, e: React.PointerEvent) => {
-    if (!IS_COARSE) return
+    const selectCol = () => setSelection({ anchor: { row: 0, col }, focus: { row: MAX_ROWS - 1, col } })
+    if (!wantsHeaderDrag(e)) {
+      selectCol() // desktop mouse: click selects; the edge handle resizes
+      return
+    }
     const startX = e.clientX
     const startW = sheet.colWidths[col] ?? DEFAULT_COL_WIDTH
     let resizing = false
@@ -684,15 +697,18 @@ export default function Grid() {
     }
     const onUp = () => {
       cleanup()
-      // A tap (never crossed the drag threshold) selects the whole column.
-      if (!resizing) setSelection({ anchor: { row: 0, col }, focus: { row: MAX_ROWS - 1, col } })
+      if (!resizing) selectCol() // a tap (no drag) selects the whole column
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', cleanup) // e.g. cross-axis scroll took over
+    window.addEventListener('pointercancel', cleanup) // cross-axis scroll took over
   }
   const onRowHeaderPointerDown = (row: number, e: React.PointerEvent) => {
-    if (!IS_COARSE) return
+    const selectRow = () => setSelection({ anchor: { row, col: 0 }, focus: { row, col: MAX_COLS - 1 } })
+    if (!wantsHeaderDrag(e)) {
+      selectRow()
+      return
+    }
     const startY = e.clientY
     const startH = rowHeightUnscaled(row)
     let resizing = false
@@ -707,14 +723,14 @@ export default function Grid() {
     }
     const onUp = () => {
       cleanup()
-      if (!resizing)
-        setSelection({ anchor: { row, col: 0 }, focus: { row, col: MAX_COLS - 1 } })
+      if (!resizing) selectRow()
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', cleanup)
   }
   const onRowResizeDown = (row: number, e: React.PointerEvent) => {
+    if (e.pointerType !== 'mouse') return // mouse only; touch uses whole-header drag
     e.preventDefault()
     e.stopPropagation()
     const startY = e.clientY
@@ -943,13 +959,6 @@ export default function Grid() {
                     : undefined
                 }
                 onPointerDown={(e) => onColHeaderPointerDown(c, e)}
-                onMouseDown={() => {
-                  if (IS_COARSE) return // touch selects on tap via the pointer handler
-                  setSelection({
-                    anchor: { row: 0, col: c },
-                    focus: { row: MAX_ROWS - 1, col: c },
-                  })
-                }}
               >
                 <div className="colhead-wrap">
                   {colToLetter(c)}
@@ -996,13 +1005,6 @@ export default function Grid() {
                     : { height: rh }
                 }
                 onPointerDown={(e) => onRowHeaderPointerDown(r, e)}
-                onMouseDown={() => {
-                  if (IS_COARSE) return // touch selects on tap via the pointer handler
-                  setSelection({
-                    anchor: { row: r, col: 0 },
-                    focus: { row: r, col: MAX_COLS - 1 },
-                  })
-                }}
               >
                 {r + 1}
                 <div
