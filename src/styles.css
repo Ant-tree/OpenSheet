@@ -495,6 +495,21 @@ table.grid {
 .cell.num {
   text-align: right;
 }
+/* Conditional-format data bar: a proportional fill behind the cell text. */
+.data-bar {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 1px;
+  opacity: 0.55;
+  z-index: 0;
+  pointer-events: none;
+}
+.cell-body {
+  position: relative;
+  z-index: 1; /* keep text above the data bar */
+}
 /* Wrapped-cell body: multi-line text clipped to the (auto-grown) row height. */
 .cell-wrap {
   white-space: normal;

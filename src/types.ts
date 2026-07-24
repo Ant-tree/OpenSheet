@@ -43,16 +43,29 @@ export interface MergeRange {
 
 export type CondFormatOp = 'greaterThan' | 'lessThan' | 'between' | 'equal' | 'textContains'
 
-/** A conditional-formatting rule: highlight cells in `range` whose value matches. */
+/** 'cell' = value comparison (default); 'colorScale'/'dataBar' span the range. */
+export type CondFormatKind = 'cell' | 'colorScale' | 'dataBar'
+
+/** A conditional-formatting rule. `kind` (default 'cell') highlights cells whose
+ *  value matches `op`; 'colorScale' shades each cell between min/max colors by
+ *  value; 'dataBar' draws an in-cell bar proportional to the value. */
 export interface CondFormatRule {
   range: MergeRange
-  op: CondFormatOp
+  kind?: CondFormatKind
+  // --- cell rules ---
+  op?: CondFormatOp
   /** Comparison operand (parsed as a number for numeric ops). */
-  value1: string
+  value1?: string
   /** Upper bound for the 'between' operator. */
   value2?: string
-  bgColor: string
+  bgColor?: string
   color?: string
+  // --- colorScale rules ---
+  minColor?: string
+  midColor?: string
+  maxColor?: string
+  // --- dataBar rules ---
+  barColor?: string
 }
 
 /** A list data-validation: cells in `range` accept only one of `values` (dropdown). */

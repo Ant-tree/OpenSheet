@@ -9,7 +9,7 @@ import {
   HEADER_WIDTH,
 } from '../store/useStore'
 import { borderCss, displayValue, strongerBorder } from '../lib/format'
-import { condStyleFor } from '../lib/condFormat'
+import { condStyleFor, rangeNumericStats, type DataBar } from '../lib/condFormat'
 import { colToLetter, isInAnyRange, isInSelection, key, selectionBounds } from '../lib/utils'
 import { wrappedLineCount, BASE_FONT_SIZE } from '../lib/textMeasure'
 import type { BorderSide, CellBorders, CellFormat, CellRef, MergeRange } from '../types'
@@ -240,7 +240,9 @@ export default function Grid() {
   // The cache key is just "row,col", so it must also be invalidated when the
   // active sheet changes (switching sheets does not bump `rev`) — otherwise the
   // grid keeps showing the previous sheet's cell values.
-  const contentCache = useRef(new Map<string, { text: string; isNum: boolean; contentStyle: React.CSSProperties }>())
+  const contentCache = useRef(
+    new Map<string, { text: string; isNum: boolean; contentStyle: React.CSSProperties; dataBar?: DataBar }>(),
+  )
   const contentRev = useRef(-1)
   const contentSheet = useRef(-1)
   if (contentRev.current !== rev || contentSheet.current !== activeSheetId) {
@@ -248,6 +250,19 @@ export default function Grid() {
     contentSheet.current = activeSheetId
     contentCache.current.clear()
   }
+  // Range min/max for colorScale/dataBar rules (recomputed when data changes).
+  const condStats = useMemo(() => {
+    const m = new Map<(typeof sheet.condFormats)[number], { min: number; max: number }>()
+    for (const rule of sheet.condFormats) {
+      const kind = rule.kind ?? 'cell'
+      if (kind === 'colorScale' || kind === 'dataBar') {
+        const stats = rangeNumericStats(rule.range, (r, c) => useStore.getState().getComputed(r, c))
+        if (stats) m.set(rule, stats)
+      }
+    }
+    return m
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rev, activeSheetId, sheet.condFormats])
   const cellContent = (r: number, c: number, k: string, merge: MergeRange | undefined) => {
     const cached = contentCache.current.get(k)
     if (cached) return cached
@@ -271,17 +286,19 @@ export default function Grid() {
       if (fmt.valign) contentStyle.verticalAlign = fmt.valign
       if (fmt.wrap) contentStyle.whiteSpace = 'normal'
     }
+    let dataBar: DataBar | undefined
     if (sheet.condFormats.length) {
-      const cf = condStyleFor(sheet.condFormats, r, c, computed)
+      const cf = condStyleFor(sheet.condFormats, r, c, computed, condStats)
       if (cf.bgColor) contentStyle.background = cf.bgColor
       if (cf.color) contentStyle.color = cf.color
+      dataBar = cf.dataBar
     }
     const bd = resolveBorders(sheet.formats, merge, r, c)
     if (bd.top) contentStyle.borderTop = borderCss(bd.top)
     if (bd.left) contentStyle.borderLeft = borderCss(bd.left)
     if (bd.bottom) contentStyle.borderBottom = borderCss(bd.bottom)
     if (bd.right) contentStyle.borderRight = borderCss(bd.right)
-    const res = { text, isNum, contentStyle }
+    const res = { text, isNum, contentStyle, dataBar }
     contentCache.current.set(k, res)
     return res
   }
@@ -1069,7 +1086,8 @@ export default function Grid() {
                   style.fontSize = Math.round(fmt.fontSize * zoom) + 'px'
                   style.lineHeight = Math.round(fmt.fontSize * 1.3 * zoom) + 'px'
                 }
-                if (isFillCorner || note || isFilterHeader) style.position = 'relative'
+                const dataBar = content.dataBar
+                if (isFillCorner || note || isFilterHeader || dataBar) style.position = 'relative'
                 const frozenR = r < frozenRows
                 const frozenC = c < frozenCols
                 if (frozenR || frozenC) {
@@ -1098,6 +1116,12 @@ export default function Grid() {
                     onDoubleClick={() => enterEdit(r, c)}
                     onContextMenu={(e) => onCellContextMenu(r, c, e)}
                   >
+                    {dataBar && (
+                      <div
+                        className="data-bar"
+                        style={{ width: `${dataBar.pct}%`, background: dataBar.color }}
+                      />
+                    )}
                     {isActive ? (
                       <>
                         {!isEditing && (
@@ -1141,6 +1165,9 @@ export default function Grid() {
                       <div className="cell-wrap" style={{ maxHeight: rh }}>
                         {text}
                       </div>
+                    ) : dataBar ? (
+                      // Wrapped so the text paints above the data bar.
+                      <span className="cell-body">{text}</span>
                     ) : (
                       text
                     )}

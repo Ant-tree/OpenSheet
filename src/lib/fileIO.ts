@@ -385,6 +385,7 @@ type XlsxCfRule = {
   operator?: string
   formulae?: unknown[]
   text?: string
+  color?: XlsxColor | XlsxColor[]
   style?: { fill?: { bgColor?: XlsxColor; fgColor?: XlsxColor }; font?: { color?: XlsxColor } }
 }
 
@@ -398,6 +399,21 @@ function readCondFormats(ws: ExcelJS.Worksheet): CondFormatRule[] {
     const range = decodeA1Range(cf.ref?.split(' ')[0] ?? '')
     if (!range) continue
     for (const rule of cf.rules ?? []) {
+      if (rule.type === 'colorScale') {
+        const colors = Array.isArray(rule.color) ? rule.color : []
+        out.push({
+          range,
+          kind: 'colorScale',
+          minColor: resolveColor(colors[0]) ?? '#f8696b',
+          maxColor: resolveColor(colors[colors.length - 1]) ?? '#63be7b',
+        })
+        continue
+      }
+      if (rule.type === 'dataBar') {
+        const c = Array.isArray(rule.color) ? rule.color[0] : rule.color
+        out.push({ range, kind: 'dataBar', barColor: resolveColor(c) ?? '#63be7b' })
+        continue
+      }
       const bg = resolveColor(rule.style?.fill?.bgColor ?? rule.style?.fill?.fgColor)
       if (!bg) continue
       const color = resolveColor(rule.style?.font?.color)
@@ -973,24 +989,45 @@ function encodeA1Range(m: MergeRange): string {
   return `${encodeCol(m.left)}${m.top + 1}:${encodeCol(m.right)}${m.bottom + 1}`
 }
 
-/** Write our conditional-formatting rules as exceljs cellIs / containsText rules. */
+/** Write our conditional-formatting rules as exceljs rules (cellIs / containsText
+ *  / colorScale / dataBar) so they open as native Excel conditional formatting. */
 function writeCondFormats(ws: ExcelJS.Worksheet, rules: CondFormatRule[]) {
   if (!rules.length) return
   let priority = 1
   for (const rule of rules) {
     const ref = encodeA1Range(rule.range)
-    const style: Record<string, unknown> = {
-      fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: hexToArgb(rule.bgColor) } },
-    }
-    if (rule.color) style.font = { color: { argb: hexToArgb(rule.color) } }
+    const kind = rule.kind ?? 'cell'
     let cfRule: Record<string, unknown> | null = null
-    if (rule.op === 'textContains') {
-      cfRule = { type: 'containsText', operator: 'containsText', text: rule.value1, priority: priority++, style }
+    if (kind === 'colorScale') {
+      cfRule = {
+        type: 'colorScale',
+        cfvo: [{ type: 'min' }, { type: 'max' }],
+        color: [
+          { argb: hexToArgb(rule.minColor ?? '#f8696b') },
+          { argb: hexToArgb(rule.maxColor ?? '#63be7b') },
+        ],
+        priority: priority++,
+      }
+    } else if (kind === 'dataBar') {
+      cfRule = {
+        type: 'dataBar',
+        cfvo: [{ type: 'min' }, { type: 'max' }],
+        color: { argb: hexToArgb(rule.barColor ?? '#63be7b') },
+        priority: priority++,
+      }
     } else {
-      const operator = opToExcel(rule.op)
-      if (!operator) continue
-      const formulae = rule.op === 'between' ? [rule.value1, rule.value2 ?? ''] : [rule.value1]
-      cfRule = { type: 'cellIs', operator, formulae, priority: priority++, style }
+      const style: Record<string, unknown> = {
+        fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: hexToArgb(rule.bgColor ?? '#ffe08a') } },
+      }
+      if (rule.color) style.font = { color: { argb: hexToArgb(rule.color) } }
+      if (rule.op === 'textContains') {
+        cfRule = { type: 'containsText', operator: 'containsText', text: rule.value1, priority: priority++, style }
+      } else {
+        const operator = rule.op ? opToExcel(rule.op) : null
+        if (!operator) continue
+        const formulae = rule.op === 'between' ? [rule.value1, rule.value2 ?? ''] : [rule.value1]
+        cfRule = { type: 'cellIs', operator, formulae, priority: priority++, style }
+      }
     }
     ws.addConditionalFormatting({ ref, rules: [cfRule] } as unknown as Parameters<
       ExcelJS.Worksheet['addConditionalFormatting']
