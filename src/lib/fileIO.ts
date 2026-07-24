@@ -278,6 +278,10 @@ function readCellFormat(cell: ExcelJS.Cell): CellFormat | undefined {
     if (font.bold) fmt.bold = true
     if (font.italic) fmt.italic = true
     if (font.underline) fmt.underline = true
+    if (font.strike) fmt.strike = true
+    // Excel points → app px (96px per 72pt). Skip the default 11pt so most
+    // cells stay at the app's base size.
+    if (font.size && font.size !== 11) fmt.fontSize = Math.round((font.size * 96) / 72)
     const color = resolveColor(font.color)
     if (color) fmt.color = color
   }
@@ -1059,11 +1063,14 @@ function writeDataValidations(ws: ExcelJS.Worksheet, validations: DataValidation
 }
 
 function applyFormatToCell(cell: ExcelJS.Cell, fmt: CellFormat) {
-  if (fmt.bold || fmt.italic || fmt.underline || fmt.color) {
+  if (fmt.bold || fmt.italic || fmt.underline || fmt.strike || fmt.color || fmt.fontSize) {
     cell.font = {
       bold: fmt.bold,
       italic: fmt.italic,
       underline: fmt.underline,
+      strike: fmt.strike,
+      // App stores px; Excel fonts are in points (96px per 72pt).
+      size: fmt.fontSize ? Math.round((fmt.fontSize * 72) / 96) : undefined,
       color: fmt.color ? { argb: hexToArgb(fmt.color) } : undefined,
     }
   }

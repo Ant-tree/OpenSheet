@@ -214,7 +214,7 @@ export default function Toolbar({
   // After a native save, confirm where the file landed and offer to share it.
   const [savedModal, setSavedModal] = useState<NativeSaveResult | null>(null)
 
-  const toggle = (kProp: 'bold' | 'italic' | 'underline') =>
+  const toggle = (kProp: 'bold' | 'italic' | 'underline' | 'strike') =>
     applyFormat({ [kProp]: !active?.[kProp] })
 
   const setAlign = (align: HAlign) => applyFormat({ align })
@@ -488,6 +488,18 @@ export default function Toolbar({
       </div>
 
       <div className="group">
+        <select
+          className="fontsize-select"
+          title={t('fontSize')}
+          value={active?.fontSize ?? 13}
+          onChange={(e) => applyFormat({ fontSize: Number(e.target.value) })}
+        >
+          {[10, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48].map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
         <button
           className={`tbtn icon-btn${active?.bold ? ' active' : ''}`}
           title={t('bold')}
@@ -508,6 +520,13 @@ export default function Toolbar({
           onClick={() => toggle('underline')}
         >
           <Icon name="underline" />
+        </button>
+        <button
+          className={`tbtn icon-btn${active?.strike ? ' active' : ''}`}
+          title={t('strikethrough')}
+          onClick={() => toggle('strike')}
+        >
+          <Icon name="strikethrough" />
         </button>
         <button
           className={`tbtn icon-btn${painterActive ? ' active' : ''}`}

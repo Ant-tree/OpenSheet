@@ -11,7 +11,7 @@ import {
 import { borderCss, displayValue, strongerBorder } from '../lib/format'
 import { condStyleFor } from '../lib/condFormat'
 import { colToLetter, isInAnyRange, isInSelection, key, selectionBounds } from '../lib/utils'
-import { wrappedLineCount } from '../lib/textMeasure'
+import { wrappedLineCount, BASE_FONT_SIZE } from '../lib/textMeasure'
 import type { BorderSide, CellBorders, CellFormat, CellRef, MergeRange } from '../types'
 import { useZoomStore } from '../zoom'
 import ContextMenu from './ContextMenu'
@@ -159,23 +159,29 @@ export default function Grid() {
   // rows without wrapped content stay at DEFAULT_ROW_HEIGHT. Deterministic
   // canvas-based line counting keeps this consistent with the clipped render.
   const autoRowHeights = useMemo(() => {
-    const LINE = DEFAULT_ROW_HEIGHT - 2 // per-line height (unscaled), matches --cell-lh at zoom 1
     const PAD = 2
+    // Per-line height (unscaled) at a given font size; 13px → 22 (so 1 line = 24 = default).
+    const perLine = (fs: number) => Math.round((fs * (DEFAULT_ROW_HEIGHT - 2)) / BASE_FONT_SIZE)
     const map: Record<number, number> = {}
     for (const k in sheet.formats) {
       const fmt = sheet.formats[k]
-      if (!fmt?.wrap) continue
+      if (!fmt) continue
+      const fs = fmt.fontSize ?? BASE_FONT_SIZE
+      const bigFont = fs > BASE_FONT_SIZE
+      if (!fmt.wrap && !bigFont) continue // nothing that needs a taller row
       const comma = k.indexOf(',')
       const r = Number(k.slice(0, comma))
       const c = Number(k.slice(comma + 1))
       if (sheet.rowHeights[r] != null) continue // manual height wins
-      const computed = useStore.getState().getComputed(r, c)
-      const text = displayValue(computed, fmt)
-      if (!text) continue
-      const colW = sheet.colWidths[c] ?? DEFAULT_COL_WIDTH
-      const lines = wrappedLineCount(text, colW - 10) // 0 5px horizontal padding
-      if (lines <= 1) continue
-      const h = lines * LINE + PAD
+      let lines = 1
+      if (fmt.wrap) {
+        const text = displayValue(useStore.getState().getComputed(r, c), fmt)
+        if (text) {
+          const colW = sheet.colWidths[c] ?? DEFAULT_COL_WIDTH
+          lines = wrappedLineCount(text, colW - 10, fs) // 0 5px horizontal padding
+        }
+      }
+      const h = lines * perLine(fs) + PAD
       if (h > (map[r] ?? DEFAULT_ROW_HEIGHT)) map[r] = h
     }
     return map
@@ -253,7 +259,12 @@ export default function Grid() {
     if (fmt) {
       if (fmt.bold) contentStyle.fontWeight = 700
       if (fmt.italic) contentStyle.fontStyle = 'italic'
-      if (fmt.underline) contentStyle.textDecoration = 'underline'
+      // underline + strikethrough combine into one text-decoration.
+      if (fmt.underline || fmt.strike) {
+        contentStyle.textDecoration = [fmt.underline && 'underline', fmt.strike && 'line-through']
+          .filter(Boolean)
+          .join(' ')
+      }
       if (fmt.color) contentStyle.color = fmt.color
       if (fmt.bgColor) contentStyle.background = fmt.bgColor
       if (fmt.align) contentStyle.textAlign = fmt.align
@@ -1052,6 +1063,12 @@ export default function Grid() {
                 const text = content.text
                 const isNum = content.isNum
                 const style: React.CSSProperties = { ...content.contentStyle }
+                // Per-cell font size (kept out of the rev-keyed content cache
+                // since it scales with the live zoom).
+                if (fmt?.fontSize) {
+                  style.fontSize = Math.round(fmt.fontSize * zoom) + 'px'
+                  style.lineHeight = Math.round(fmt.fontSize * 1.3 * zoom) + 'px'
+                }
                 if (isFillCorner || note || isFilterHeader) style.position = 'relative'
                 const frozenR = r < frozenRows
                 const frozenC = c < frozenCols

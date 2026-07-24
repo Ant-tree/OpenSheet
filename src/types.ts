@@ -20,6 +20,9 @@ export interface CellFormat {
   bold?: boolean
   italic?: boolean
   underline?: boolean
+  strike?: boolean // strikethrough
+  /** Font size in px (app base is 13). Absent = default. Exported to Excel as pt. */
+  fontSize?: number
   align?: HAlign
   valign?: VAlign
   wrap?: boolean

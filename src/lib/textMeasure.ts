@@ -8,55 +8,56 @@
 let ctx: CanvasRenderingContext2D | null = null
 let ctxFont = ''
 
-/** The cell font at unscaled size, matching `.cell` in styles.css. */
-const CELL_FONT =
-  "13px system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+/** The cell font family, matching `.cell` in styles.css. */
+const CELL_FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+/** App base font size in px (`.cell` font-size at zoom 1). */
+export const BASE_FONT_SIZE = 13
 
-function measureCtx(): CanvasRenderingContext2D | null {
-  if (ctx) return ctx
+function measureCtx(fontSize: number): CanvasRenderingContext2D | null {
   if (typeof document === 'undefined') return null
-  const canvas = document.createElement('canvas')
-  ctx = canvas.getContext('2d')
-  if (ctx && ctxFont !== CELL_FONT) {
-    ctx.font = CELL_FONT
-    ctxFont = CELL_FONT
+  if (!ctx) ctx = document.createElement('canvas').getContext('2d')
+  if (!ctx) return null
+  const font = `${fontSize}px ${CELL_FONT_FAMILY}`
+  if (ctxFont !== font) {
+    ctx.font = font
+    ctxFont = font
   }
   return ctx
 }
 
-function textWidth(s: string): number {
-  const c = measureCtx()
+function textWidth(s: string, fontSize: number): number {
+  const c = measureCtx(fontSize)
   if (!c) return 0
   return c.measureText(s).width
 }
 
 /**
  * Number of visual lines `text` occupies when wrapped into `availWidth` px
- * (unscaled). Splits on whitespace like CSS `white-space: normal`; a single word
- * longer than the width is broken across lines by characters. Explicit newlines
- * force a break. Always at least 1.
+ * (unscaled) at `fontSize` px. Splits on whitespace like CSS `white-space:
+ * normal`; a single word longer than the width is broken across lines by
+ * characters. Explicit newlines force a break. Always at least 1.
  */
-export function wrappedLineCount(text: string, availWidth: number): number {
+export function wrappedLineCount(text: string, availWidth: number, fontSize = BASE_FONT_SIZE): number {
   if (!text || availWidth <= 0) return 1
   if (typeof document === 'undefined') return 1
   let lines = 0
   for (const paragraph of text.split('\n')) {
-    lines += linesForParagraph(paragraph, availWidth)
+    lines += linesForParagraph(paragraph, availWidth, fontSize)
   }
   return Math.max(1, lines)
 }
 
-function linesForParagraph(paragraph: string, availWidth: number): number {
+function linesForParagraph(paragraph: string, availWidth: number, fontSize: number): number {
   if (paragraph === '') return 1
   const words = paragraph.split(/(\s+)/) // keep whitespace tokens for width
   let lines = 1
   let cur = ''
   for (const w of words) {
     const candidate = cur + w
-    if (textWidth(candidate) <= availWidth || cur === '') {
+    if (textWidth(candidate, fontSize) <= availWidth || cur === '') {
       // A single token wider than the line: break it across lines by chars.
-      if (cur === '' && textWidth(w) > availWidth) {
-        const broken = breakLongToken(w, availWidth)
+      if (cur === '' && textWidth(w, fontSize) > availWidth) {
+        const broken = breakLongToken(w, availWidth, fontSize)
         lines += broken.lines - 1
         cur = broken.remainder
       } else {
@@ -70,11 +71,15 @@ function linesForParagraph(paragraph: string, availWidth: number): number {
   return lines
 }
 
-function breakLongToken(token: string, availWidth: number): { lines: number; remainder: string } {
+function breakLongToken(
+  token: string,
+  availWidth: number,
+  fontSize: number,
+): { lines: number; remainder: string } {
   let lines = 1
   let cur = ''
   for (const ch of token) {
-    if (textWidth(cur + ch) <= availWidth || cur === '') {
+    if (textWidth(cur + ch, fontSize) <= availWidth || cur === '') {
       cur += ch
     } else {
       lines++

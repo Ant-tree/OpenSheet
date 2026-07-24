@@ -234,6 +234,10 @@ body {
   padding: 2px;
   cursor: pointer;
 }
+.fontsize-select {
+  width: 52px;
+  text-align: center;
+}
 .color-field {
   display: inline-flex;
   flex-direction: column;
