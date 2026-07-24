@@ -10,6 +10,7 @@ import ChartPanel from './components/ChartPanel'
 import DataValidationPanel from './components/DataValidationPanel'
 import ShortcutsHelp from './components/ShortcutsHelp'
 import Toast from './components/Toast'
+import TouchDebug from './components/TouchDebug'
 import { useStore } from './store/useStore'
 import { addRecentFile, clearCachedDoc } from './lib/recentFiles'
 import { iterateMultiSelection } from './lib/utils'
@@ -377,6 +378,7 @@ export default function App() {
         </select>
       </div>
       <Toast />
+      <TouchDebug />
     </div>
   )
 }
