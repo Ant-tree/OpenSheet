@@ -144,6 +144,23 @@ Legend: ✅ supported · ❌ not supported (feature/menu item absent).
 9. **Native code can't be verified in the sandbox** (no Android/iOS/GTK build).
    Rust/Java/Swift changes must be built + tested on device by the maintainer.
    Web + desktop-JS behavior IS verifiable headlessly (see below).
+10. **A stale PWA service worker can serve OLD assets on device forever.** The
+    app used to be a PWA; its `autoUpdate` service worker precached the whole
+    app. Removing vite-plugin-pwa does NOT unregister a worker already installed
+    in a device WebView — it keeps serving its precache, so `cap sync` copies new
+    `dist/` that the WebView never loads. Symptom: code changes have *zero* effect
+    on device no matter how many rebuilds. It can't self-heal (our unregister
+    code lives in the new JS the worker won't serve). Fix once per device:
+    uninstall/reinstall the app (or clear its data). `main.tsx` unregisters any
+    worker + clears caches so fresh installs are clean. If a change seems ignored
+    on device, suspect a cached bundle before re-diagnosing the code.
+11. **Touch resize registers its listeners at MOUNT, non-passive, on the scroll
+    element** (`Grid.tsx` useEffect on `scrollRef`) — NOT via React `onTouch*` /
+    a `document` listener added mid-gesture. Android WebView treats
+    document-level touch listeners as passive for scroll perf, so a
+    `preventDefault()` there is ignored and the resize loses to the scroll.
+    Element-level + mount-time + `{passive:false}` is honoured. Headers carry
+    `data-col`/`data-row` for the listener to read the index.
 
 ## Testing approach used here
 
@@ -178,22 +195,20 @@ off on the web, so web tests confirm no regressions there; native shells
   unaffected. `main.tsx` unregisters any worker + clears caches a prior version
   left, so existing web installs shed the old precache. Dropped orphaned
   `public/pwa-*.png` icons.
-- Grid: **drag-resize** for columns AND rows. **Mouse** uses thin edge handles
-  inside the header cell (parent `overflow: hidden` clips — and makes
-  un-hittable — any overhang); `onColHeaderPointerDown`/`onRowHeaderPointerDown`
-  early-return on non-mouse pointers and just select on click. **Touch** makes
-  the **whole header** the grab target (a thin edge handle is near-impossible to
-  finger) via RAW touch events (`onTouchStart` → a non-passive `document`
-  `touchmove` listener that calls `preventDefault()`), NOT Pointer Events +
-  `touch-action`. Reason: Android WebView begins scrolling on the slightest
-  diagonal drag and fires `pointercancel`, which killed pointer-based resize on
-  Android (iOS worked). `preventDefault()` on a non-passive touchmove blocks the
-  scroll outright and does NOT depend on the WebView honouring `touch-action`
-  (belt-and-suspenders `touch-action: none` on `.colhead`/`.rowhead` stays).
-  Drag along the axis resizes; a tap selects. Headers don't scroll — scroll the
-  grid body. E2E drives real touch (incl. diagonal) via CDP
-  `Input.dispatchTouchEvent`. NOTE: mobile needs `npm run build && npx cap sync
-  <platform>` to pick this up — the native app bundles `dist/`.
+- Grid: **drag-resize** for columns AND rows (confirmed on iOS + Android).
+  **Mouse** uses thin edge handles inside the header cell (parent `overflow:
+  hidden` clips — and makes un-hittable — any overhang); the header
+  `onPointerDown` early-returns on non-mouse pointers and just selects on click.
+  **Touch** makes the **whole header** the grab target (a thin edge handle is
+  near-impossible to finger). The touch listeners are registered at MOUNT,
+  NON-PASSIVE, on the scroll element (gotcha #11) — `preventDefault()` on
+  touchmove blocks the WebView scroll and owns the gesture, so it does NOT depend
+  on `touch-action` (which Android WebView was ignoring). Drag along the axis
+  resizes; a tap selects. Headers don't scroll — scroll the grid body. E2E drives
+  real touch (incl. diagonal) via CDP `Input.dispatchTouchEvent`. NOTE: mobile
+  needs `npm run build && npx cap sync <platform>` AND — if a device still shows
+  old behavior — an app reinstall to shed any stale PWA service worker (gotcha
+  #10).
 - Tests: added a committed suite — Vitest unit (`tests/unit`) + Playwright E2E
   (`tests/e2e`, playwright-core + Vite dev server). `npm test` / `test:e2e` /
   `test:all`. See `tests/README.md`.

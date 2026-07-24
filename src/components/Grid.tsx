@@ -12,7 +12,6 @@ import { borderCss, displayValue, strongerBorder } from '../lib/format'
 import { condStyleFor } from '../lib/condFormat'
 import { colToLetter, isInAnyRange, isInSelection, key, selectionBounds } from '../lib/utils'
 import { wrappedLineCount } from '../lib/textMeasure'
-import { tlog } from '../lib/touchDebug'
 import type { BorderSide, CellBorders, CellFormat, CellRef, MergeRange } from '../types'
 import { useZoomStore } from '../zoom'
 import ContextMenu from './ContextMenu'
@@ -703,11 +702,9 @@ export default function Grid() {
         const index = Number(colh.getAttribute('data-col'))
         const start = useStore.getState().activeSheet().colWidths[index] ?? DEFAULT_COL_WIDTH
         drag = { axis: 'x', index, origin: e.touches[0].clientX, start, resizing: false }
-        tlog(`▼ COL header ${index}  (${target.className || target.tagName})`)
       } else if (rowh) {
         const index = Number(rowh.getAttribute('data-row'))
         drag = { axis: 'y', index, origin: e.touches[0].clientY, start: rowHeightRef.current(index), resizing: false }
-        tlog(`▼ ROW header ${index}  (${target.className || target.tagName})`)
       } else {
         drag = null
       }
@@ -718,10 +715,7 @@ export default function Grid() {
       const zoom = useZoomStore.getState().zoom
       const cur = drag.axis === 'x' ? e.touches[0].clientX : e.touches[0].clientY
       const delta = cur - drag.origin
-      if (!drag.resizing && Math.abs(delta) > 6) {
-        drag.resizing = true
-        tlog(`↔ resizing ${drag.axis}`)
-      }
+      if (!drag.resizing && Math.abs(delta) > 6) drag.resizing = true
       if (drag.resizing) {
         const size = drag.start + delta / zoom
         if (drag.axis === 'x') useStore.getState().setColWidth(drag.index, size)
@@ -729,15 +723,11 @@ export default function Grid() {
       }
     }
     const onEnd = () => {
-      if (drag) {
-        if (!drag.resizing) {
-          const s = useStore.getState()
-          if (drag.axis === 'x') s.setSelection({ anchor: { row: 0, col: drag.index }, focus: { row: MAX_ROWS - 1, col: drag.index } })
-          else s.setSelection({ anchor: { row: drag.index, col: 0 }, focus: { row: drag.index, col: MAX_COLS - 1 } })
-          tlog(`• tap → select ${drag.axis} ${drag.index}`)
-        } else {
-          tlog(`✓ resized ${drag.axis} ${drag.index}`)
-        }
+      if (drag && !drag.resizing) {
+        // A tap (no drag past the threshold) selects the whole row/column.
+        const s = useStore.getState()
+        if (drag.axis === 'x') s.setSelection({ anchor: { row: 0, col: drag.index }, focus: { row: MAX_ROWS - 1, col: drag.index } })
+        else s.setSelection({ anchor: { row: drag.index, col: 0 }, focus: { row: drag.index, col: MAX_COLS - 1 } })
       }
       drag = null
     }
