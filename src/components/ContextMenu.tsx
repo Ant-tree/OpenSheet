@@ -57,6 +57,18 @@ export default function ContextMenu({
     if (!text) text = store.internalClipboardText() ?? ''
     if (text) store.pasteText(text)
   }
+  const doPasteValues = async () => {
+    const store = useStore.getState()
+    let text = ''
+    try {
+      text = await navigator.clipboard.readText()
+    } catch {
+      /* ignore */
+    }
+    if (text) store.pasteValuesOnly(text)
+    else store.pasteValuesOnly() // fall back to the internal clipboard
+  }
+  const hasClip = useStore.getState().hasClipboard()
 
   const focus = useStore.getState().selection.focus
   const hasNote = !!useStore.getState().getNote(focus.row, focus.col)
@@ -92,6 +104,16 @@ export default function ContextMenu({
       <button className="menu-item" onClick={run(doPaste)}>
         {t('paste')}
       </button>
+      {hasClip && (
+        <>
+          <button className="menu-item" onClick={run(doPasteValues)}>
+            {t('pasteValues')}
+          </button>
+          <button className="menu-item" onClick={run(() => useStore.getState().pasteFormatsOnly())}>
+            {t('pasteFormats')}
+          </button>
+        </>
+      )}
       <div className="menu-sep" />
       <button className="menu-item" onClick={run(() => useStore.getState().insertRows(b().top))}>
         {t('insertRowAbove')}

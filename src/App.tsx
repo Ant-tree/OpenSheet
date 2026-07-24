@@ -136,6 +136,17 @@ export default function App() {
         return
       }
 
+      // Paste special: Ctrl/Cmd+Shift+V pastes values only.
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'v' || e.key === 'V')) {
+        if (useStore.getState().editing) return // let the input's native paste win
+        e.preventDefault()
+        const store = useStore.getState()
+        Promise.resolve(navigator.clipboard?.readText?.() ?? '')
+          .then((text) => (text ? store.pasteValuesOnly(text) : store.pasteValuesOnly()))
+          .catch(() => store.pasteValuesOnly())
+        return
+      }
+
       // Find / replace (override the browser's Ctrl+F / Ctrl+H).
       if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'h')) {
         e.preventDefault()

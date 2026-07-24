@@ -166,6 +166,13 @@ interface StoreState {
   copySelection: () => string
   cutSelection: () => string
   pasteText: (text: string) => void
+  /** Paste special: values only (no formatting). Uses `text` if given, else the
+   *  internal clipboard. */
+  pasteValuesOnly: (text?: string) => void
+  /** Paste special: formatting only (from the last in-app copy), values untouched. */
+  pasteFormatsOnly: () => void
+  /** Whether an in-app copy is available (for enabling paste-special menu items). */
+  hasClipboard: () => boolean
   /** TSV of the last in-app copy, for pasting when the system clipboard is unavailable. */
   internalClipboardText: () => string | null
   /** Replace every occurrence of `find` with `repl` across the active sheet; returns match count. */
@@ -1180,6 +1187,63 @@ export const useStore = create<StoreState>((set, get) => {
       if (internal) updateSheet(set, get, sheet.id, { formats })
       set({ selection: { anchor: { row, col }, focus: { row: maxR, col: maxC } } })
       bump(set)
+    },
+
+    pasteValuesOnly(text) {
+      let cells: string[][] | null = null
+      if (text) {
+        const lines = text.replace(/\r\n?/g, '\n').split('\n')
+        if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
+        cells = lines.map((l) => l.split('\t'))
+      } else if (clipboard) {
+        cells = clipboard.rows
+      }
+      if (!cells) return
+      pushUndo(set, get)
+      const { hf, activeSheetId } = get()
+      const { row, col } = get().selection.focus
+      let maxR = row
+      let maxC = col
+      cells.forEach((line, i) =>
+        line.forEach((val, j) => {
+          const r = row + i
+          const c = col + j
+          if (r >= MAX_ROWS || c >= MAX_COLS) return
+          hf.setCellContents({ sheet: activeSheetId, row: r, col: c }, val === '' ? null : val)
+          maxR = Math.max(maxR, r)
+          maxC = Math.max(maxC, c)
+        }),
+      )
+      set({ selection: { anchor: { row, col }, focus: { row: maxR, col: maxC } } })
+      bump(set)
+    },
+
+    pasteFormatsOnly() {
+      if (!clipboard) return
+      pushUndo(set, get)
+      const sheet = get().activeSheet()
+      const { row, col } = get().selection.focus
+      const formats = { ...sheet.formats }
+      let maxR = row
+      let maxC = col
+      clipboard.formats.forEach((line, i) =>
+        line.forEach((f, j) => {
+          const r = row + i
+          const c = col + j
+          if (r >= MAX_ROWS || c >= MAX_COLS) return
+          if (f) formats[key(r, c)] = { ...f }
+          else delete formats[key(r, c)]
+          maxR = Math.max(maxR, r)
+          maxC = Math.max(maxC, c)
+        }),
+      )
+      updateSheet(set, get, sheet.id, { formats })
+      set({ selection: { anchor: { row, col }, focus: { row: maxR, col: maxC } } })
+      bump(set)
+    },
+
+    hasClipboard() {
+      return clipboard !== null
     },
   }
 })
