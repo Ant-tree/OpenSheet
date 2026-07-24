@@ -42,6 +42,8 @@ export interface SerializedDoc {
     rowHeights: Record<number, number>
     frozenRows: number
     frozenCols: number
+    hiddenRows?: number[]
+    hiddenCols?: number[]
     charts?: ChartSpec[]
   }[]
 }
@@ -155,8 +157,16 @@ interface StoreState {
   setColumnFilter: (col: number, allowed: string[] | null) => void
   /** Distinct display values in a column below the filter header row. */
   columnValues: (col: number) => string[]
-  /** Rows currently hidden by the active filters. */
+  /** Rows currently hidden (active filters + manually hidden). */
   hiddenRows: () => Set<number>
+  /** Manually hidden columns. */
+  hiddenCols: () => Set<number>
+  /** Hide / unhide the selected rows or columns. Unhide reveals hidden ones
+   *  within the selection's span. */
+  hideRows: () => void
+  hideCols: () => void
+  unhideRows: () => void
+  unhideCols: () => void
 
   insertRows: (at: number, count?: number) => void
   deleteRows: (at: number, count?: number) => void
@@ -225,6 +235,8 @@ interface StoreState {
       rowHeights?: Record<number, number>
       frozenRows?: number
       frozenCols?: number
+      hiddenRows?: number[]
+      hiddenCols?: number[]
     }[],
     fileName: string,
   ) => void
@@ -688,10 +700,10 @@ export const useStore = create<StoreState>((set, get) => {
 
     hiddenRows() {
       const { hf, activeSheetId, filterHeaderRow, columnFilters } = get()
-      const hidden = new Set<number>()
+      const sheet = get().activeSheet()
+      const hidden = new Set<number>(sheet.hiddenRows ?? []) // manually hidden
       const cols = Object.keys(columnFilters).map(Number)
       if (filterHeaderRow === null || !cols.length) return hidden
-      const sheet = get().activeSheet()
       const height = hf.getSheetDimensions(activeSheetId).height
       for (let r = filterHeaderRow + 1; r < height; r++) {
         for (const col of cols) {
@@ -704,6 +716,53 @@ export const useStore = create<StoreState>((set, get) => {
         }
       }
       return hidden
+    },
+
+    hiddenCols() {
+      return new Set<number>(get().activeSheet().hiddenCols ?? [])
+    },
+
+    hideRows() {
+      const sheet = get().activeSheet()
+      const b = selectionBounds(get().selection)
+      const hidden = new Set(sheet.hiddenRows ?? [])
+      for (let r = b.top; r <= b.bottom; r++) hidden.add(r)
+      pushUndo(set, get)
+      updateSheet(set, get, sheet.id, { hiddenRows: [...hidden].sort((a, z) => a - z) })
+      bump(set)
+    },
+
+    hideCols() {
+      const sheet = get().activeSheet()
+      const b = selectionBounds(get().selection)
+      const hidden = new Set(sheet.hiddenCols ?? [])
+      for (let c = b.left; c <= b.right; c++) hidden.add(c)
+      pushUndo(set, get)
+      updateSheet(set, get, sheet.id, { hiddenCols: [...hidden].sort((a, z) => a - z) })
+      bump(set)
+    },
+
+    unhideRows() {
+      const sheet = get().activeSheet()
+      if (!sheet.hiddenRows?.length) return
+      const b = selectionBounds(get().selection)
+      // Reveal any hidden row within the selected span (inclusive).
+      const kept = sheet.hiddenRows.filter((r) => r < b.top || r > b.bottom)
+      if (kept.length === sheet.hiddenRows.length) return
+      pushUndo(set, get)
+      updateSheet(set, get, sheet.id, { hiddenRows: kept })
+      bump(set)
+    },
+
+    unhideCols() {
+      const sheet = get().activeSheet()
+      if (!sheet.hiddenCols?.length) return
+      const b = selectionBounds(get().selection)
+      const kept = sheet.hiddenCols.filter((c) => c < b.left || c > b.right)
+      if (kept.length === sheet.hiddenCols.length) return
+      pushUndo(set, get)
+      updateSheet(set, get, sheet.id, { hiddenCols: kept })
+      bump(set)
     },
 
     insertRows(at, count = 1) {
@@ -807,6 +866,8 @@ export const useStore = create<StoreState>((set, get) => {
           rowHeights: m.rowHeights,
           frozenRows: m.frozenRows,
           frozenCols: m.frozenCols,
+          hiddenRows: m.hiddenRows,
+          hiddenCols: m.hiddenCols,
           charts: charts[m.id] ?? [],
         })),
       }
@@ -829,6 +890,8 @@ export const useStore = create<StoreState>((set, get) => {
         rowHeights: s.rowHeights ?? {},
         frozenRows: s.frozenRows ?? 0,
         frozenCols: s.frozenCols ?? 0,
+        hiddenRows: s.hiddenRows?.length ? s.hiddenRows : undefined,
+        hiddenCols: s.hiddenCols?.length ? s.hiddenCols : undefined,
       }))
       const chartsBySheet: Record<number, ChartSpec[]> = {}
       data.sheets.forEach((s, i) => {
@@ -984,6 +1047,8 @@ export const useStore = create<StoreState>((set, get) => {
         rowHeights: s.rowHeights ?? {},
         frozenRows: s.frozenRows ?? 0,
         frozenCols: s.frozenCols ?? 0,
+        hiddenRows: s.hiddenRows?.length ? s.hiddenRows : undefined,
+        hiddenCols: s.hiddenCols?.length ? s.hiddenCols : undefined,
       }))
 
       set({
@@ -1317,6 +1382,8 @@ function cloneMeta(m: SheetMeta): SheetMeta {
     rowHeights: { ...m.rowHeights },
     frozenRows: m.frozenRows,
     frozenCols: m.frozenCols,
+    hiddenRows: m.hiddenRows ? [...m.hiddenRows] : undefined,
+    hiddenCols: m.hiddenCols ? [...m.hiddenCols] : undefined,
   }
 }
 

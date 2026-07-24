@@ -150,6 +150,19 @@ export default function ContextMenu({
         {t('clearContents')}
       </button>
       <div className="menu-sep" />
+      <button className="menu-item" onClick={run(() => useStore.getState().hideRows())}>
+        {t('hideRows')}
+      </button>
+      <button className="menu-item" onClick={run(() => useStore.getState().hideCols())}>
+        {t('hideCols')}
+      </button>
+      <button className="menu-item" onClick={run(() => useStore.getState().unhideRows())}>
+        {t('unhideRows')}
+      </button>
+      <button className="menu-item" onClick={run(() => useStore.getState().unhideCols())}>
+        {t('unhideCols')}
+      </button>
+      <div className="menu-sep" />
       <button className="menu-item" onClick={run(() => useStore.getState().mergeSelection())}>
         {t('merge')}
       </button>

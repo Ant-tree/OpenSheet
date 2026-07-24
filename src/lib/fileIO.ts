@@ -51,6 +51,8 @@ export interface ImportedSheet {
   rowHeights: Record<number, number>
   frozenRows: number
   frozenCols: number
+  hiddenRows?: number[]
+  hiddenCols?: number[]
 }
 
 export interface ImportedWorkbook {
@@ -199,6 +201,8 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
     const notes: Record<string, string> = {}
     const colWidths: Record<number, number> = {}
     const rowHeights: Record<number, number> = {}
+    const hiddenRows: number[] = []
+    const hiddenCols: number[] = []
 
     const rowCount = ws.rowCount
     const colCount = ws.columnCount
@@ -214,13 +218,15 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
         if (note) notes[`${r - 1},${c - 1}`] = note
       }
       rows.push(row)
-      const rh = ws.getRow(r).height
-      if (typeof rh === 'number') rowHeights[r - 1] = ptToPx(rh)
+      const xr = ws.getRow(r)
+      if (typeof xr.height === 'number') rowHeights[r - 1] = ptToPx(xr.height)
+      if (xr.hidden) hiddenRows.push(r - 1)
     }
 
     for (let c = 1; c <= colCount; c++) {
-      const cw = ws.getColumn(c).width
-      if (typeof cw === 'number') colWidths[c - 1] = charToPx(cw)
+      const xc = ws.getColumn(c)
+      if (typeof xc.width === 'number') colWidths[c - 1] = charToPx(xc.width)
+      if (xc.hidden) hiddenCols.push(c - 1)
     }
 
     const merges: MergeRange[] = readMerges(ws)
@@ -232,7 +238,7 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
     const frozenRows = frozen ? view?.ySplit ?? 0 : 0
     const frozenCols = frozen ? view?.xSplit ?? 0 : 0
 
-    sheets.push({ name: ws.name, rows, merges, formats, notes, condFormats, dataValidations, colWidths, rowHeights, frozenRows, frozenCols })
+    sheets.push({ name: ws.name, rows, merges, formats, notes, condFormats, dataValidations, colWidths, rowHeights, frozenRows, frozenCols, hiddenRows, hiddenCols })
   })
 
   return { fileName: file.name, sheets }
@@ -927,6 +933,8 @@ export function buildWorkbook(
       }
       writeCondFormats(ws, meta.condFormats)
       writeDataValidations(ws, meta.dataValidations)
+      for (const r of meta.hiddenRows ?? []) ws.getRow(r + 1).hidden = true
+      for (const c of meta.hiddenCols ?? []) ws.getColumn(c + 1).hidden = true
       if (meta.frozenRows || meta.frozenCols) {
         ws.views = [{ state: 'frozen', xSplit: meta.frozenCols, ySplit: meta.frozenRows }]
       }

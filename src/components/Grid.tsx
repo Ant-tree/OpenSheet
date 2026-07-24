@@ -116,6 +116,15 @@ export default function Grid() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rev, filterHeaderRow, columnFilters],
   )
+  const hiddenCols = useMemo(
+    () => new Set(sheet.hiddenCols ?? []),
+    [sheet.hiddenCols],
+  )
+  const visibleCols = useMemo(() => {
+    const arr: number[] = []
+    for (let c = 0; c < MAX_COLS; c++) if (!hiddenCols.has(c)) arr.push(c)
+    return arr
+  }, [hiddenCols])
   const [filterOpen, setFilterOpen] = useState<{ col: number; x: number; y: number } | null>(null)
 
   // Data-validation dropdown for the active cell.
@@ -997,9 +1006,9 @@ export default function Grid() {
   const colWidth = (c: number) => Math.round((sheet.colWidths[c] ?? DEFAULT_COL_WIDTH) * zoom)
   const totalWidth = useMemo(() => {
     let w = HW
-    for (let c = 0; c < MAX_COLS; c++) w += Math.round((sheet.colWidths[c] ?? DEFAULT_COL_WIDTH) * zoom)
+    for (const c of visibleCols) w += Math.round((sheet.colWidths[c] ?? DEFAULT_COL_WIDTH) * zoom)
     return w
-  }, [sheet.colWidths, zoom, HW])
+  }, [sheet.colWidths, zoom, HW, visibleCols])
 
   // Freeze panes: sticky offsets (px) for the first N frozen rows / columns.
   const frozenRows = sheet.frozenRows ?? 0
@@ -1043,14 +1052,14 @@ export default function Grid() {
       <table className="grid" style={{ width: totalWidth }}>
         <colgroup>
           <col style={{ width: HW }} />
-          {Array.from({ length: MAX_COLS }, (_, c) => (
+          {visibleCols.map((c) => (
             <col key={c} style={{ width: colWidth(c) }} />
           ))}
         </colgroup>
         <thead>
           <tr>
             <th className="corner" />
-            {Array.from({ length: MAX_COLS }, (_, c) => (
+            {visibleCols.map((c) => (
               <th
                 key={c}
                 className={`colhead${c >= bounds.left && c <= bounds.right ? ' sel' : ''}`}
@@ -1120,7 +1129,7 @@ export default function Grid() {
                   onMouseDown={(e) => e.stopPropagation()}
                 />
               </th>
-              {Array.from({ length: MAX_COLS }, (_, c) => {
+              {visibleCols.map((c) => {
                 const k = key(r, c)
                 if (covered.has(k)) return null
                 const merge = anchorOf.get(k)

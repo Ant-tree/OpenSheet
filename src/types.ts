@@ -130,4 +130,7 @@ export interface SheetMeta {
   /** Number of leading rows/columns frozen (kept visible while scrolling). */
   frozenRows: number
   frozenCols: number
+  /** Manually hidden row / column indices. */
+  hiddenRows?: number[]
+  hiddenCols?: number[]
 }
