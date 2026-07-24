@@ -35,28 +35,31 @@ npm run preview  # preview the production build
 | Feature | Description |
 | --- | --- |
 | **Formulas / functions** | ~400 Excel-compatible functions such as `=SUM`, `=AVERAGE`, `=IF`, `=VLOOKUP` (powered by [HyperFormula](https://hyperformula.handsontable.com/)) |
-| **Cell formatting** | Bold · italic · underline, text/fill color, horizontal & vertical alignment, text wrap, number formats (currency, percent, decimal, date), borders, and cell merging |
-| **Styles round-trip** | Fonts, fills, colors (including theme/indexed), number formats, borders, column widths and row heights are read from and written back to `.xlsx` |
-| **Conditional formatting** | Highlight cells by rule (greater/less than, between, equal, text contains) — evaluated live and round-tripped to `.xlsx` |
+| **Cell formatting** | Bold · italic · underline · strikethrough, font size, text/fill color, horizontal & vertical alignment, text wrap (rows auto-grow to fit), number formats (currency ₩ / $, percent, decimal, date), borders, and cell merging |
+| **Format painter** | Copy one cell's formatting and paint it over another range |
+| **Styles round-trip** | Fonts (incl. size & strikethrough), fills, colors (including theme/indexed), number formats, borders, column widths and row heights are read from and written back to `.xlsx` |
+| **Conditional formatting** | Highlight cells by rule (greater/less than, between, equal, text contains), plus **color scales** and **data bars** — evaluated live and round-tripped to `.xlsx` |
 | **Cell notes** | Attach a note to any cell (red corner marker + hover tooltip); saved as `.xlsx` comments |
-| **Data validation** | Give cells a dropdown list of allowed values (picker on the cell) — round-tripped to `.xlsx` |
-| **Rows & columns** | Insert / delete rows and columns from the right-click menu — formulas, merges, notes and rules all shift accordingly |
+| **Data validation** | Give cells a dropdown list of allowed values, or turn them into **TRUE/FALSE checkboxes** — round-tripped to `.xlsx` (checkbox values export as booleans) |
+| **Rows & columns** | Insert / delete rows and columns from the right-click menu — formulas, merges, notes and rules all shift accordingly. Drag the header borders to resize (mouse), or drag a header on touch |
 | **Find & replace** | `Ctrl/Cmd+F` to find, `Ctrl/Cmd+H` to replace one or all |
 | **Freeze panes** | Freeze leading rows/columns so headers stay visible while scrolling |
 | **Auto-fill** | Drag the fill handle to extend a series (numbers) or copy values/formulas |
 | **Undo / redo** | Full history for content, formatting, borders, merges, notes, rules and sorting |
-| **Clipboard** | Copy · cut · paste over a range as TSV — formats are kept when pasting within the app, and it interoperates with Excel/Sheets |
+| **Clipboard** | Copy · cut · paste over a range as TSV — formats are kept when pasting within the app, and it interoperates with Excel/Sheets. **Paste special**: values only or formatting only (`Ctrl/Cmd+Shift+V` / right-click menu) |
+| **Multi-range selection** | `Ctrl/Cmd`-click to add non-contiguous ranges; formatting, clearing and the status-bar stats span them all |
 | **Sorting** | Sort a selected range by its key column — relative formula references are automatically re-based by how far each row moved |
 | **AutoFilter** | Turn a selection into a filter (header row gets dropdowns); pick values per column to show/hide matching rows |
 | **Charts** | Turn a selected range into a bar / line / pie chart (labels from the first column, series from the header row); **insert** it onto the sheet as a draggable card and it is embedded into the saved `.xlsx` as an image |
 | **Multiple sheets** | Add / delete / rename sheet tabs, with cross-sheet references |
-| **File I/O** | **New** blank workbook, open and save `.xlsx` / `.csv`; **Save As** to a new name/location; **Save in place** overwrites the opened file (Chromium browsers) or downloads a copy |
-| **Recent files** | Quickly reopen recent files (stored locally in the browser; works on desktop and mobile) |
-| **Autosave & recovery** | Your work is autosaved locally and restored when you reopen the app |
-| **Print / PDF** | Print or export to PDF from the *Save* menu (grid-only print layout) |
+| **File I/O** | **New** blank workbook, open and save `.xlsx` / `.csv`; **Save As** to a new name/location; **Save in place** overwrites the opened file (Chromium browsers + desktop app) or downloads a copy |
+| **Auto-save** | Optional toggle in the *Save* menu — debounced write-back to the open file (where save-in-place exists: Chromium web / desktop) |
+| **Recent files** | Quickly reopen recent files, always re-read fresh from disk — on the desktop app (by path) and Android (by SAF URI). Hidden on web / iOS (no persistent reference) |
+| **Keyboard shortcuts** | Built-in cheat-sheet panel (`F1` / toolbar **?**) |
+| **Print / PDF** | Print or export to PDF from the *Save* menu (grid-only print layout); shows an "unsupported" notice inside the native mobile apps |
 | **Dark mode** | System / light / dark theme, switchable from the status bar |
 | **Multi-language** | English / Korean UI, switchable from the status bar (remembers your choice) |
-| **Installable (PWA)** | Install from the browser to run in its own window and work **offline** (service worker caches the app); desktop Chrome/Edge, Android, iOS |
+| **Runs everywhere** | The same code ships as a web app, a **Tauri desktop app** (macOS / Windows / Linux), and a **Capacitor mobile app** (iOS / Android) — see the sections below |
 
 ## Usage
 
@@ -77,7 +80,11 @@ npm run preview  # preview the production build
 - **Freeze panes**: the *Freeze* toolbar menu
 - **Formulas**: type an expression starting with `=` in a cell or the formula bar
 - **Reference picking**: while editing a `=`formula, click (or drag) cells to insert their `A1` reference / range
-- **Resize columns**: drag the column-header border
+- **Resize rows / columns**: drag the header border (mouse); on touch, drag a row/column header
+- **Font size · strikethrough**: the toolbar (font-size dropdown, S button)
+- **Multi-range select**: `Ctrl/Cmd`-click cells/ranges to add non-contiguous selections
+- **Paste special**: `Ctrl/Cmd+Shift+V` (values only), or right-click ▸ *Paste values / formatting only*
+- **Keyboard shortcuts**: `F1` (or the toolbar **?**) opens the full list
 - **Rename a sheet**: double-click its tab
 - **Theme / language**: switch from the selectors in the status bar
 
@@ -128,10 +135,10 @@ changing web code, run `npm run cap:sync` (or the `cap:*` scripts, which sync fo
 >   + [`@capacitor/share`](https://www.npmjs.com/package/@capacitor/share) — a web view can't
 >   download a `blob:` URL. These plugins are in `dependencies`, so `npm install` then
 >   `npx cap sync` adds them to the native projects.
-> - **Print / PDF** works in mobile browsers (and the PWA). Inside a Capacitor
->   native app the wrapped web view doesn't support `window.print()`; install a
->   Capacitor Printer plugin and the app will use it automatically (see
->   `src/lib/print.ts`).
+> - **Print / PDF** works in mobile browsers. Inside a Capacitor native app the
+>   wrapped web view doesn't support `window.print()`, so the app shows a localized
+>   "not supported" notice; to enable it, wire up a Capacitor Printer plugin in
+>   `src/lib/print.ts`.
 
 ## Desktop app (macOS / Windows / Linux)
 
@@ -251,17 +258,20 @@ explicit version. `release` flags: `--push`, `--no-tag`, `--dry-run`.
 
 ```
 src/
-  App.tsx              layout + global shortcuts (save, undo, clipboard, find) + autosave + status bar
+  App.tsx              layout + global shortcuts (save, undo, clipboard, find, zoom) + auto-save + status bar
   i18n.ts              English/Korean strings + language store
   theme.ts             light/dark/system theme store
+  zoom.ts              in-app zoom store
+  settings.ts          user settings store (auto-save toggle)
   components/
     Toolbar.tsx        file I/O · formatting · borders · merge · sort · conditional-format controls
     FormulaBar.tsx     name box + formula input
-    Grid.tsx           spreadsheet grid (selection, editing/IME, merges, borders, freeze, fill, notes)
+    Grid.tsx           spreadsheet grid (selection, editing/IME, merges, borders, freeze, fill, resize, notes)
     SheetTabs.tsx      sheet tabs
-    ContextMenu.tsx    right-click / long-press menu (insert/delete, notes, clipboard)
+    ContextMenu.tsx    right-click / long-press menu (insert/delete, notes, clipboard, paste special)
     FindReplace.tsx    find & replace panel
-    CondFormatPanel.tsx  conditional-formatting rule editor
+    CondFormatPanel.tsx  conditional-formatting rule editor (rules / color scale / data bar)
+    DataValidationPanel.tsx  dropdown-list & checkbox validation
     Icon.tsx           inline SVG icon loader
   icons/               hand-drawn SVG toolbar icons
   store/useStore.ts    Zustand store wrapping HyperFormula (editing, undo/redo, clipboard, notes, rules)
@@ -269,7 +279,8 @@ src/
     fileIO.ts          ExcelJS-based xlsx/csv read & write (styles, borders, sizes, notes, rules)
     format.ts          number/date display formatting + border helpers
     condFormat.ts      conditional-formatting evaluation + Excel operator mapping
-    recentFiles.ts     IndexedDB recent-files list + autosave draft
+    textMeasure.ts     canvas line-counting for auto row height
+    recentFiles.ts     IndexedDB recent-files list
     utils.ts           address conversion · selection · formula-reference shifting
   types.ts             shared types
 ```
@@ -277,7 +288,7 @@ src/
 ## Known limitations
 
 - The grid provides 5000 rows × 78 columns (A–BZ), rendered with row virtualization so only the visible slice is in the DOM. Adjust `MAX_ROWS` / `MAX_COLS` in `store/useStore.ts` if needed.
-- **Save in place** uses the File System Access API and works in Chromium browsers (Chrome/Edge); elsewhere saving downloads a copy.
+- **Save in place** works in Chromium browsers (Chrome/Edge, via the File System Access API) and the desktop app (by path); elsewhere saving creates a new file / downloads a copy.
 - The legacy `.xls` format is not supported — re-save as `.xlsx` first.
 - Theme/indexed colors are resolved with the default Office palette, so custom-themed workbooks may differ slightly.
 - The sort's formula-reference adjustment targets the common case of same-row references (e.g. `=B2*C2`).

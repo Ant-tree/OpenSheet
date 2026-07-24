@@ -12,7 +12,7 @@ worker on the web only risked serving stale assets.)
   for theming). No component library. Icons are inline SVGs (`src/icons/*.svg`,
   loaded via `import.meta.glob` in `Icon.tsx`).
 - **State:** Zustand (`src/store/useStore.ts`, the single document store; plus
-  small stores `theme.ts`, `zoom.ts`, `lib/toast.ts`).
+  small stores `theme.ts`, `zoom.ts`, `settings.ts` (auto-save), `lib/toast.ts`).
 - **Formulas:** HyperFormula (`gpl-v3` license key). The store holds cell content
   in HyperFormula; per-cell formatting/notes/merges/etc. live in `SheetMeta`.
 - **File format:** ExcelJS for `.xlsx`/`.csv` read/write (`src/lib/fileIO.ts`).
@@ -42,17 +42,18 @@ that's an environment limitation, not a code error.
 - `src/store/useStore.ts` — the document: sheets, selection, editing, formats,
   merges, filters, undo/redo, file handle/path, all mutations. **`rev` is bumped
   on every document mutation to trigger re-renders.**
-- `src/components/Grid.tsx` — the virtualized grid (fixed row height!), cell
-  editing (persistent focused `<input>` per active cell for IME safety), mouse +
-  touch selection, fill handle, zoom-scaled geometry.
+- `src/components/Grid.tsx` — the virtualized grid (variable row heights — see
+  gotcha #8), cell editing (persistent focused `<input>` per active cell for IME
+  safety), mouse + touch selection, fill handle, drag-resize, zoom-scaled geometry.
 - `src/components/Toolbar.tsx` — file ops (open/save/save-as), formatting, and
   opens the panels (cond-format, chart, data-validation, find/replace).
 - `src/components/{FormulaBar,SheetTabs,FindReplace,CondFormatPanel,ChartPanel,
   DataValidationPanel,ContextMenu,FilterDropdown,FormulaAutocomplete,Toast}.tsx`
 - `src/lib/` — `fileIO.ts` (import/export + all platform save/open dispatch),
   `nativeSave.ts` (Capacitor Filesystem/Share + `SafSaver` bindings),
-  `print.ts`, `format.ts`, `condFormat.ts`, `chartRender.ts`, `recentFiles.ts`
-  (IndexedDB recents), `utils.ts`.
+  `print.ts`, `format.ts`, `condFormat.ts`, `chartRender.ts`, `textMeasure.ts`
+  (canvas line-counting for auto row height), `recentFiles.ts` (IndexedDB
+  recents), `utils.ts`.
 - `src-tauri/src/lib.rs` — Rust commands: `print_page`, `save_workbook_as`,
   `save_workbook_to_path`, `open_workbook`, `read_file`.
 - `android/app/src/main/java/com/anttree/opensheet/SafSaverPlugin.java` — SAF
@@ -66,7 +67,7 @@ IME-safe editing, formulas + autocomplete, copy/cut/paste (TSV) + paste special
 notes, context menu (insert/delete rows/cols, etc.), non-contiguous multi-range
 selection (Ctrl/⌘-click).
 Formatting: bold/italic/underline/strikethrough, font size, h/v align, wrap,
-text/fill color, number formats (currency/percent/decimals), borders,
+text/fill color, number formats (currency ₩ & $ / percent / decimals), borders,
 merge/unmerge, freeze panes, format painter.
 Files/UX: auto-save toggle (in-place platforms), keyboard-shortcuts help (F1).
 Data: sort, AutoFilter, conditional formatting (cell rules + color scales + data
@@ -186,6 +187,8 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Toolbar: currency button icon is now **₩**; added a separate **$ (USD)** button.
+  `asCurrency` → `₩#,##0`, `asCurrencyUsd` → `$#,##0` (both keep the cell's decimals).
 - Feature: **paste special** — values only / formatting only (context menu +
   Ctrl+Shift+V for values). Uses the internal copy (rows + formats).
 - Feature: **checkbox cells** — a `kind:'checkbox'` data-validation renders a
