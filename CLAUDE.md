@@ -178,22 +178,22 @@ off on the web, so web tests confirm no regressions there; native shells
   unaffected. `main.tsx` unregisters any worker + clears caches a prior version
   left, so existing web installs shed the old precache. Dropped orphaned
   `public/pwa-*.png` icons.
-- Grid: **drag-resize** for columns AND rows via Pointer Events. Mouse uses thin
-  edge handles inside the header cell (parent `overflow: hidden` clips — and
-  makes un-hittable — any overhang). Touch/pen makes the **whole header** the
-  grab target — a thin edge handle is near-impossible to finger — where a drag
-  along the axis resizes and a tap selects. **Decided per-event via
-  `e.pointerType`, NOT a `(pointer: coarse)` media query** — Capacitor WebViews
-  don't reliably report coarse, which silently killed touch resize on real
-  iOS/Android. `touch-action: none` on the headers is likewise applied
-  UNCONDITIONALLY (only affects touch input) — NOT `pan-x`/`pan-y`: Android
-  WebView starts a cross-axis pan on the slightest diagonal drag and fires
-  `pointercancel`, which killed the resize on Android while iOS worked. `none`
-  hands all header gestures to us. The only cost is you can't drag-scroll from
-  the header strips themselves (scroll the grid body instead); touch-only,
-  header-only. Edge handlers early-return on non-mouse pointers so the finger
-  falls through to the whole-header drag. E2E covers real touch drags (incl.
-  diagonal) via CDP `Input.dispatchTouchEvent`.
+- Grid: **drag-resize** for columns AND rows. **Mouse** uses thin edge handles
+  inside the header cell (parent `overflow: hidden` clips — and makes
+  un-hittable — any overhang); `onColHeaderPointerDown`/`onRowHeaderPointerDown`
+  early-return on non-mouse pointers and just select on click. **Touch** makes
+  the **whole header** the grab target (a thin edge handle is near-impossible to
+  finger) via RAW touch events (`onTouchStart` → a non-passive `document`
+  `touchmove` listener that calls `preventDefault()`), NOT Pointer Events +
+  `touch-action`. Reason: Android WebView begins scrolling on the slightest
+  diagonal drag and fires `pointercancel`, which killed pointer-based resize on
+  Android (iOS worked). `preventDefault()` on a non-passive touchmove blocks the
+  scroll outright and does NOT depend on the WebView honouring `touch-action`
+  (belt-and-suspenders `touch-action: none` on `.colhead`/`.rowhead` stays).
+  Drag along the axis resizes; a tap selects. Headers don't scroll — scroll the
+  grid body. E2E drives real touch (incl. diagonal) via CDP
+  `Input.dispatchTouchEvent`. NOTE: mobile needs `npm run build && npx cap sync
+  <platform>` to pick this up — the native app bundles `dist/`.
 - Tests: added a committed suite — Vitest unit (`tests/unit`) + Playwright E2E
   (`tests/e2e`, playwright-core + Vite dev server). `npm test` / `test:e2e` /
   `test:all`. See `tests/README.md`.

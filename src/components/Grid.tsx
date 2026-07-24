@@ -666,69 +666,71 @@ export default function Grid() {
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', up)
   }
-  // Touch: the whole header cell is the resize target — a thin edge handle is
-  // near-impossible to grab with a finger (and on Android a stray touch scrolls
-  // instead). Drag along the axis resizes; a tap (no drag) selects the row/col.
-  // `touch-action` (CSS) reserves the cross-axis for scrolling and hands the
-  // resize axis to us, so a pan the other way still scrolls the grid.
-  // Whole-header resize is used for touch/pen (and any coarse-pointer device),
-  // decided per-event via `pointerType` rather than a global media query —
-  // Capacitor WebViews don't always report `(pointer: coarse)`, which used to
-  // silently disable this on real phones. Mouse keeps click-to-select + the thin
-  // edge handle.
-  const wantsHeaderDrag = (e: React.PointerEvent) => IS_COARSE || e.pointerType !== 'mouse'
+  // Mouse: click a header to select the whole row/column (the thin edge handle
+  // does the resize). Touch is handled separately by the touch handlers below —
+  // guard on `pointerType` so a finger doesn't also trigger a select here.
   const onColHeaderPointerDown = (col: number, e: React.PointerEvent) => {
-    const selectCol = () => setSelection({ anchor: { row: 0, col }, focus: { row: MAX_ROWS - 1, col } })
-    if (!wantsHeaderDrag(e)) {
-      selectCol() // desktop mouse: click selects; the edge handle resizes
-      return
-    }
-    const startX = e.clientX
-    const startW = sheet.colWidths[col] ?? DEFAULT_COL_WIDTH
-    let resizing = false
-    const move = (ev: PointerEvent) => {
-      if (!resizing && Math.abs(ev.clientX - startX) > 6) resizing = true
-      if (resizing) setColWidth(col, startW + (ev.clientX - startX) / zoom)
-    }
-    const cleanup = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', cleanup)
-    }
-    const onUp = () => {
-      cleanup()
-      if (!resizing) selectCol() // a tap (no drag) selects the whole column
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', cleanup) // cross-axis scroll took over
+    if (e.pointerType !== 'mouse') return
+    setSelection({ anchor: { row: 0, col }, focus: { row: MAX_ROWS - 1, col } })
   }
   const onRowHeaderPointerDown = (row: number, e: React.PointerEvent) => {
-    const selectRow = () => setSelection({ anchor: { row, col: 0 }, focus: { row, col: MAX_COLS - 1 } })
-    if (!wantsHeaderDrag(e)) {
-      selectRow()
-      return
-    }
-    const startY = e.clientY
-    const startH = rowHeightUnscaled(row)
-    let resizing = false
-    const move = (ev: PointerEvent) => {
-      if (!resizing && Math.abs(ev.clientY - startY) > 6) resizing = true
-      if (resizing) setRowHeight(row, startH + (ev.clientY - startY) / zoom)
-    }
-    const cleanup = () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', cleanup)
-    }
-    const onUp = () => {
-      cleanup()
-      if (!resizing) selectRow()
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', cleanup)
+    if (e.pointerType !== 'mouse') return
+    setSelection({ anchor: { row, col: 0 }, focus: { row, col: MAX_COLS - 1 } })
   }
+
+  // Touch: the whole header cell is the resize target (a thin edge handle is
+  // near-impossible to finger). We handle RAW touch events — not Pointer Events
+  // + `touch-action` — because Android WebView begins scrolling on the slightest
+  // diagonal drag and fires pointercancel, which killed the resize there. A
+  // non-passive `touchmove` listener calls `preventDefault()` to stop the scroll
+  // outright; this does NOT depend on the browser honouring `touch-action`.
+  // Drag along the axis resizes; a tap (no drag past the threshold) selects.
+  const startHeaderTouchDrag = (
+    e: React.TouchEvent,
+    axis: 'x' | 'y',
+    startSize: number,
+    apply: (size: number) => void,
+    select: () => void,
+  ) => {
+    if (e.touches.length !== 1) return
+    const t0 = e.touches[0]
+    const origin = axis === 'x' ? t0.clientX : t0.clientY
+    let resizing = false
+    const move = (ev: TouchEvent) => {
+      if (ev.touches.length !== 1) return
+      ev.preventDefault() // headers never scroll — keep full control of the gesture
+      const cur = axis === 'x' ? ev.touches[0].clientX : ev.touches[0].clientY
+      const delta = cur - origin
+      if (!resizing && Math.abs(delta) > 6) resizing = true
+      if (resizing) apply(startSize + delta / zoom)
+    }
+    const end = () => {
+      document.removeEventListener('touchmove', move)
+      document.removeEventListener('touchend', end)
+      document.removeEventListener('touchcancel', end)
+      if (!resizing) select() // a tap selects the whole row/column
+    }
+    // passive:false so preventDefault actually blocks the WebView scroll.
+    document.addEventListener('touchmove', move, { passive: false })
+    document.addEventListener('touchend', end)
+    document.addEventListener('touchcancel', end)
+  }
+  const onColHeaderTouchStart = (col: number, e: React.TouchEvent) =>
+    startHeaderTouchDrag(
+      e,
+      'x',
+      sheet.colWidths[col] ?? DEFAULT_COL_WIDTH,
+      (w) => setColWidth(col, w),
+      () => setSelection({ anchor: { row: 0, col }, focus: { row: MAX_ROWS - 1, col } }),
+    )
+  const onRowHeaderTouchStart = (row: number, e: React.TouchEvent) =>
+    startHeaderTouchDrag(
+      e,
+      'y',
+      rowHeightUnscaled(row),
+      (h) => setRowHeight(row, h),
+      () => setSelection({ anchor: { row, col: 0 }, focus: { row, col: MAX_COLS - 1 } }),
+    )
   const onRowResizeDown = (row: number, e: React.PointerEvent) => {
     if (e.pointerType !== 'mouse') return // mouse only; touch uses whole-header drag
     e.preventDefault()
@@ -959,6 +961,7 @@ export default function Grid() {
                     : undefined
                 }
                 onPointerDown={(e) => onColHeaderPointerDown(c, e)}
+                onTouchStart={(e) => onColHeaderTouchStart(c, e)}
               >
                 <div className="colhead-wrap">
                   {colToLetter(c)}
@@ -1005,6 +1008,7 @@ export default function Grid() {
                     : { height: rh }
                 }
                 onPointerDown={(e) => onRowHeaderPointerDown(r, e)}
+                onTouchStart={(e) => onRowHeaderTouchStart(r, e)}
               >
                 {r + 1}
                 <div

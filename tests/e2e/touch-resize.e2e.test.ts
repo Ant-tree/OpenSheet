@@ -29,17 +29,6 @@ async function openTouchApp(): Promise<Page> {
   return page
 }
 
-async function dragBy(page: Page, selector: string, nth: number, dx: number, dy: number) {
-  const box = await page.locator(selector).nth(nth).boundingBox()
-  if (!box) throw new Error(`no box for ${selector}`)
-  const cx = box.x + box.width / 2
-  const cy = box.y + box.height / 2
-  await page.mouse.move(cx, cy)
-  await page.mouse.down()
-  await page.mouse.move(cx + dx, cy + dy, { steps: 6 })
-  await page.mouse.up()
-}
-
 const colWidth = (page: Page, c: number) =>
   page.evaluate((c) => (window as any).store.getState().activeSheet().colWidths[c] ?? 96, c)
 const rowHeight = (page: Page, r: number) =>
@@ -64,19 +53,22 @@ async function touchDragBy(page: Page, selector: string, nth: number, dx: number
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
 }
 
-describe('touch resize (whole header is the grab target)', () => {
-  test('dragging anywhere across a column header resizes that column', async () => {
-    const page = await openTouchApp()
-    const before = await colWidth(page, 1)
-    await dragBy(page, '.colhead', 1, 70, 0) // drag from the header's center
-    await expect.poll(() => colWidth(page, 1)).toBeGreaterThan(before + 40)
-    await page.context().close()
-  })
+// A real touch tap (no movement) at an element's center.
+async function touchTap(page: Page, selector: string, nth: number) {
+  const box = await page.locator(selector).nth(nth).boundingBox()
+  if (!box) throw new Error(`no box for ${selector}`)
+  const cx = box.x + box.width / 2
+  const cy = box.y + box.height / 2
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] })
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+}
 
-  test('a real touch drag (pointerType=touch) resizes the column', async () => {
+describe('touch resize (whole header is the grab target)', () => {
+  test('a real touch drag across a column header resizes that column', async () => {
     const page = await openTouchApp()
     const before = await colWidth(page, 1)
-    await touchDragBy(page, '.colhead', 1, 72, 0)
+    await touchDragBy(page, '.colhead', 1, 72, 0) // drag from the header's center
     await expect.poll(() => colWidth(page, 1)).toBeGreaterThan(before + 40)
     await page.context().close()
   })
@@ -91,18 +83,17 @@ describe('touch resize (whole header is the grab target)', () => {
     await page.context().close()
   })
 
-  test('dragging down a row header resizes that row', async () => {
+  test('a real touch drag down a row header resizes that row', async () => {
     const page = await openTouchApp()
-    await dragBy(page, 'tr:has(.rowhead) .rowhead', 1, 0, 45)
+    await touchDragBy(page, 'tr:has(.rowhead) .rowhead', 1, 0, 45)
     await expect.poll(() => rowHeight(page, 1)).not.toBeNull()
     expect(await rowHeight(page, 1)).toBeGreaterThan(40)
     await page.context().close()
   })
 
-  test('a tap (no drag) on a column header still selects the whole column', async () => {
+  test('a touch tap (no drag) on a column header selects the whole column', async () => {
     const page = await openTouchApp()
-    const box = await page.locator('.colhead').nth(2).boundingBox()
-    await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2)
+    await touchTap(page, '.colhead', 2)
     const sel = await page.evaluate(() => (window as any).store.getState().selection)
     expect(sel.anchor.col).toBe(2)
     expect(sel.focus.col).toBe(2)
