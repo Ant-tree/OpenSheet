@@ -118,6 +118,8 @@ export interface SheetMeta {
   formats: Record<string, CellFormat>
   /** Per-cell notes/comments keyed by "row,col". */
   notes: Record<string, string>
+  /** Per-cell hyperlink URLs keyed by "row,col". */
+  links?: Record<string, string>
   /** Conditional-formatting rules, applied in order (later rules win). */
   condFormats: CondFormatRule[]
   /** List data-validations (dropdown lists). */

@@ -35,6 +35,7 @@ export interface SerializedDoc {
     contents: CellValue[][]
     formats: Record<string, CellFormat>
     notes: Record<string, string>
+    links?: Record<string, string>
     condFormats: CondFormatRule[]
     dataValidations: DataValidation[]
     merges: MergeRange[]
@@ -98,6 +99,7 @@ interface StoreState {
   getComputed: (row: number, col: number) => unknown
   getFormat: (row: number, col: number) => CellFormat | undefined
   getNote: (row: number, col: number) => string | undefined
+  getLink: (row: number, col: number) => string | undefined
   activeSheet: () => SheetMeta
 
   // --- mutations ---
@@ -131,6 +133,8 @@ interface StoreState {
   clearSelectedContents: () => void
   /** Set (or clear, when text is empty) the note on a cell. */
   setNote: (row: number, col: number, text: string) => void
+  /** Set (or clear, when url is empty) the hyperlink on a cell. */
+  setLink: (row: number, col: number, url: string) => void
   /** Append a conditional-formatting rule to the active sheet. */
   addCondFormat: (rule: CondFormatRule) => void
   /** Remove all conditional-formatting rules from the active sheet. */
@@ -229,6 +233,7 @@ interface StoreState {
       merges?: MergeRange[]
       formats?: Record<string, CellFormat>
       notes?: Record<string, string>
+      links?: Record<string, string>
       condFormats?: CondFormatRule[]
       dataValidations?: DataValidation[]
       colWidths?: Record<number, number>
@@ -308,6 +313,10 @@ export const useStore = create<StoreState>((set, get) => {
 
     getNote(row, col) {
       return get().activeSheet().notes[key(row, col)]
+    },
+
+    getLink(row, col) {
+      return get().activeSheet().links?.[key(row, col)]
     },
 
     setCellContent(row, col, raw) {
@@ -504,6 +513,17 @@ export const useStore = create<StoreState>((set, get) => {
       if (text.trim()) notes[k] = text
       else delete notes[k]
       updateSheet(set, get, sheet.id, { notes })
+      bump(set)
+    },
+
+    setLink(row, col, url) {
+      pushUndo(set, get)
+      const sheet = get().activeSheet()
+      const links = { ...(sheet.links ?? {}) }
+      const k = key(row, col)
+      if (url.trim()) links[k] = url.trim()
+      else delete links[k]
+      updateSheet(set, get, sheet.id, { links })
       bump(set)
     },
 
@@ -773,6 +793,7 @@ export const useStore = create<StoreState>((set, get) => {
       updateSheet(set, get, sheet.id, {
         formats: shiftKeyed(sheet.formats, 'row', map),
         notes: shiftKeyed(sheet.notes, 'row', map),
+        links: shiftKeyed(sheet.links ?? {}, 'row', map),
         condFormats: shiftCondFormats(sheet.condFormats, 'row', at, count, false),
         dataValidations: shiftValidations(sheet.dataValidations, 'row', at, count, false),
         rowHeights: shiftSizes(sheet.rowHeights, map),
@@ -789,6 +810,7 @@ export const useStore = create<StoreState>((set, get) => {
       updateSheet(set, get, sheet.id, {
         formats: shiftKeyed(sheet.formats, 'row', map),
         notes: shiftKeyed(sheet.notes, 'row', map),
+        links: shiftKeyed(sheet.links ?? {}, 'row', map),
         condFormats: shiftCondFormats(sheet.condFormats, 'row', at, count, true),
         dataValidations: shiftValidations(sheet.dataValidations, 'row', at, count, true),
         rowHeights: shiftSizes(sheet.rowHeights, map),
@@ -805,6 +827,7 @@ export const useStore = create<StoreState>((set, get) => {
       updateSheet(set, get, sheet.id, {
         formats: shiftKeyed(sheet.formats, 'col', map),
         notes: shiftKeyed(sheet.notes, 'col', map),
+        links: shiftKeyed(sheet.links ?? {}, 'col', map),
         condFormats: shiftCondFormats(sheet.condFormats, 'col', at, count, false),
         dataValidations: shiftValidations(sheet.dataValidations, 'col', at, count, false),
         colWidths: shiftSizes(sheet.colWidths, map),
@@ -821,6 +844,7 @@ export const useStore = create<StoreState>((set, get) => {
       updateSheet(set, get, sheet.id, {
         formats: shiftKeyed(sheet.formats, 'col', map),
         notes: shiftKeyed(sheet.notes, 'col', map),
+        links: shiftKeyed(sheet.links ?? {}, 'col', map),
         condFormats: shiftCondFormats(sheet.condFormats, 'col', at, count, true),
         dataValidations: shiftValidations(sheet.dataValidations, 'col', at, count, true),
         colWidths: shiftSizes(sheet.colWidths, map),
@@ -859,6 +883,7 @@ export const useStore = create<StoreState>((set, get) => {
           contents: hf.getSheetSerialized(m.id) as CellValue[][],
           formats: m.formats,
           notes: m.notes,
+          links: m.links,
           condFormats: m.condFormats,
           dataValidations: m.dataValidations,
           merges: m.merges,
@@ -883,6 +908,7 @@ export const useStore = create<StoreState>((set, get) => {
         name: s.name,
         formats: s.formats ?? {},
         notes: s.notes ?? {},
+        links: s.links,
         condFormats: s.condFormats ?? [],
         dataValidations: s.dataValidations ?? [],
         merges: s.merges ?? [],
@@ -1040,6 +1066,7 @@ export const useStore = create<StoreState>((set, get) => {
         name: s.name,
         formats: s.formats ?? {},
         notes: s.notes ?? {},
+        links: s.links,
         condFormats: s.condFormats ?? [],
         dataValidations: s.dataValidations ?? [],
         merges: s.merges ?? [],
@@ -1371,6 +1398,7 @@ function cloneMeta(m: SheetMeta): SheetMeta {
     name: m.name,
     formats: structuredClone(m.formats),
     notes: { ...m.notes },
+    links: m.links ? { ...m.links } : undefined,
     condFormats: m.condFormats.map((r) => ({ ...r, range: { ...r.range } })),
     dataValidations: m.dataValidations.map((v) => ({
       range: { ...v.range },

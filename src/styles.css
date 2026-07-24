@@ -571,6 +571,27 @@ table.grid {
   border-left: 7px solid transparent;
   z-index: 2;
 }
+/* Cell hyperlink: blue underlined text plus a small clickable ↗ in the corner. */
+.cell.has-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.cell-link-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 0;
+  width: 13px;
+  height: 13px;
+  font-size: 10px;
+  line-height: 13px;
+  text-align: center;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  z-index: 3;
+}
 .fill-handle {
   position: absolute;
   right: -3px;

@@ -27,6 +27,14 @@ const IS_MAC =
   typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent)
 const isAdditiveClick = (e: React.MouseEvent) => (IS_MAC ? e.metaKey : e.ctrlKey)
 
+/** Open a cell hyperlink in the default browser. A bare host (no scheme) is
+ *  treated as https so `example.com` still opens. mailto:/other schemes pass
+ *  through untouched. */
+function openLink(url: string) {
+  const href = /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`
+  window.open(href, '_blank', 'noopener,noreferrer')
+}
+
 /**
  * Compute the borders to actually paint for a rendered cell (a normal cell, or
  * a merge anchor spanning `merge`). Each cell owns its bottom & right edges,
@@ -1147,6 +1155,7 @@ export default function Grid() {
                 const isFillCorner = !isEditing && r === bounds.bottom && c === bounds.right
                 const fmt = sheet.formats[k]
                 const note = sheet.notes[k]
+                const link = sheet.links?.[k]
                 const isFilterHeader = filterHeaderRow === r && filterCols.includes(c)
                 const hasColFilter = !!columnFilters[c]
                 const content = cellContent(r, c, k, merge)
@@ -1161,7 +1170,8 @@ export default function Grid() {
                 }
                 const dataBar = content.dataBar
                 const checkbox = content.checkbox
-                if (isFillCorner || note || isFilterHeader || dataBar || checkbox) style.position = 'relative'
+                if (isFillCorner || note || link || isFilterHeader || dataBar || checkbox)
+                  style.position = 'relative'
                 const frozenR = r < frozenRows
                 const frozenC = c < frozenCols
                 if (frozenR || frozenC) {
@@ -1181,7 +1191,7 @@ export default function Grid() {
                     colSpan={merge ? merge.right - merge.left + 1 : undefined}
                     className={`cell${selected ? ' selected' : ''}${isActive ? ' active' : ''}${
                       inFill ? ' fill-preview' : ''
-                    }${isNum && !fmt?.align ? ' num' : ''}`}
+                    }${isNum && !fmt?.align ? ' num' : ''}${link ? ' has-link' : ''}`}
                     style={style}
                     data-r={r}
                     data-c={c}
@@ -1263,6 +1273,22 @@ export default function Grid() {
                       text
                     )}
                     {note && <span className="note-marker" title={note} />}
+                    {link && (
+                      <button
+                        className="cell-link-marker"
+                        title={link}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openLink(link)
+                        }}
+                      >
+                        ↗
+                      </button>
+                    )}
                     {isFilterHeader && (
                       <button
                         className={`filter-caret${hasColFilter ? ' active' : ''}`}

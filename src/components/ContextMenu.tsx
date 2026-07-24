@@ -84,6 +84,19 @@ export default function ContextMenu({
     useStore.getState().setNote(row, col, '')
   }
 
+  const hasLink = !!useStore.getState().getLink(focus.row, focus.col)
+  const editLink = () => {
+    const store = useStore.getState()
+    const { row, col } = store.selection.focus
+    const current = store.getLink(row, col) ?? ''
+    const next = window.prompt(t('linkPrompt'), current)
+    if (next !== null) store.setLink(row, col, next)
+  }
+  const deleteLink = () => {
+    const { row, col } = useStore.getState().selection.focus
+    useStore.getState().setLink(row, col, '')
+  }
+
   // Keep the menu on-screen.
   const left = Math.min(x, window.innerWidth - 210)
   const top = Math.min(y, window.innerHeight - 380)
@@ -176,6 +189,14 @@ export default function ContextMenu({
       {hasNote && (
         <button className="menu-item" onClick={run(deleteNote)}>
           {t('deleteNote')}
+        </button>
+      )}
+      <button className="menu-item" onClick={run(editLink)}>
+        {hasLink ? t('editLink') : t('addLink')}
+      </button>
+      {hasLink && (
+        <button className="menu-item" onClick={run(deleteLink)}>
+          {t('removeLink')}
         </button>
       )}
     </div>,

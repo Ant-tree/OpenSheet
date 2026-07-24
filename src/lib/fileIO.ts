@@ -41,6 +41,8 @@ export interface ImportedSheet {
   formats: Record<string, CellFormat>
   /** Per-cell notes keyed by "row,col" (0-based). */
   notes: Record<string, string>
+  /** Per-cell hyperlink URLs keyed by "row,col" (0-based). */
+  links: Record<string, string>
   /** Conditional-formatting rules. */
   condFormats: CondFormatRule[]
   /** List data-validations (dropdown lists). */
@@ -199,6 +201,7 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
     const rows: (string | number | boolean | null)[][] = []
     const formats: Record<string, CellFormat> = {}
     const notes: Record<string, string> = {}
+    const links: Record<string, string> = {}
     const colWidths: Record<number, number> = {}
     const rowHeights: Record<number, number> = {}
     const hiddenRows: number[] = []
@@ -216,6 +219,8 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
         if (fmt) formats[`${r - 1},${c - 1}`] = fmt
         const note = readNote(cell)
         if (note) notes[`${r - 1},${c - 1}`] = note
+        const link = readLink(cell)
+        if (link) links[`${r - 1},${c - 1}`] = link
       }
       rows.push(row)
       const xr = ws.getRow(r)
@@ -238,7 +243,7 @@ export async function readWorkbookFile(file: File): Promise<ImportedWorkbook> {
     const frozenRows = frozen ? view?.ySplit ?? 0 : 0
     const frozenCols = frozen ? view?.xSplit ?? 0 : 0
 
-    sheets.push({ name: ws.name, rows, merges, formats, notes, condFormats, dataValidations, colWidths, rowHeights, frozenRows, frozenCols, hiddenRows, hiddenCols })
+    sheets.push({ name: ws.name, rows, merges, formats, notes, links, condFormats, dataValidations, colWidths, rowHeights, frozenRows, frozenCols, hiddenRows, hiddenCols })
   })
 
   return { fileName: file.name, sheets }
@@ -322,6 +327,17 @@ function readNote(cell: ExcelJS.Cell): string | undefined {
   const texts = (note as { texts?: { text: string }[] }).texts
   if (texts) return texts.map((tn) => tn.text).join('').trim() || undefined
   return undefined
+}
+
+/** Read a cell hyperlink URL (exceljs stores it on the value object or the cell). */
+function readLink(cell: ExcelJS.Cell): string | undefined {
+  const v = cell.value
+  if (v && typeof v === 'object') {
+    const h = (v as { hyperlink?: string }).hyperlink
+    if (typeof h === 'string' && h) return h
+  }
+  const ch = (cell as unknown as { hyperlink?: string }).hyperlink
+  return typeof ch === 'string' && ch ? ch : undefined
 }
 
 function readBorders(border: Partial<ExcelJS.Borders> | undefined): CellBorders | undefined {
@@ -457,6 +473,7 @@ function csvToSheet(fileName: string, text: string): ImportedSheet {
     merges: [],
     formats: {},
     notes: {},
+    links: {},
     condFormats: [],
     dataValidations: [],
     colWidths: {},
@@ -930,6 +947,18 @@ export function buildWorkbook(
       for (const [k, text] of Object.entries(meta.notes)) {
         const [r, c] = k.split(',').map(Number)
         ;(ws.getCell(r + 1, c + 1) as unknown as { note: string }).note = text
+      }
+      for (const [k, url] of Object.entries(meta.links ?? {})) {
+        const [r, c] = k.split(',').map(Number)
+        const cell = ws.getCell(r + 1, c + 1)
+        const existing = cell.value
+        const text =
+          existing == null || existing === ''
+            ? url
+            : typeof existing === 'object'
+              ? cell.text || url
+              : String(existing)
+        cell.value = { text, hyperlink: url }
       }
       writeCondFormats(ws, meta.condFormats)
       writeDataValidations(ws, meta.dataValidations)
