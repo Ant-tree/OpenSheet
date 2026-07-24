@@ -313,6 +313,8 @@ export default function Toolbar({
         // Desktop app: write back to the known path.
         const fmt = filePath.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx'
         await saveWorkbookToPath(hf, sheets, filePath, fmt, charts)
+        // Keep Recent pointing at this path so reopening reads the saved file.
+        addRecentFile(useStore.getState().fileName, new ArrayBuffer(0), { path: filePath })
       }
     } catch (err) {
       alert(t('saveFail') + (err as Error).message)
@@ -334,6 +336,18 @@ export default function Toolbar({
     const { hf, sheets, fileName, charts } = useStore.getState()
     try {
       if (await trySafSave(format, fileName)) return
+      if (isTauri()) {
+        // Desktop: use the native save dialog (which returns the chosen path) so
+        // we can make this the current file and refresh Recent. Otherwise the
+        // path is lost and Recent keeps pointing at the originally-opened file,
+        // so reopening it shows stale content.
+        const res = await saveWorkbookAs(hf, sheets, fileName, format, charts)
+        if (!res || !res.path) return
+        useStore.setState({ fileName: res.name })
+        setFilePath(res.path)
+        addRecentFile(res.name, res.bytes ?? new ArrayBuffer(0), { path: res.path })
+        return
+      }
       const saved = await exportWorkbook(hf, sheets, fileName, format, charts)
       if (saved) setSavedModal(saved) // native app: confirm location + offer share
     } catch (err) {
@@ -364,6 +378,9 @@ export default function Toolbar({
       if (!res) return // user cancelled
       useStore.setState({ fileName: res.name, fileHandle: res.handle })
       setFilePath(res.path ?? null) // desktop: remember the path for in-place Cmd+S
+      // Desktop: point Recent at the file we just wrote (dedup by name replaces the
+      // stale entry) so reopening from Recent reads this save, not the original.
+      if (res.path) addRecentFile(res.name, res.bytes ?? new ArrayBuffer(0), { path: res.path })
       if (res.saved) setSavedModal(res.saved)
     } catch (err) {
       alert(t('saveFail') + (err as Error).message)

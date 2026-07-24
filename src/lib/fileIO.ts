@@ -746,6 +746,9 @@ export interface SaveAsResult {
   name: string
   /** On the desktop app, the full path written (so Cmd+S can save in place). */
   path?: string
+  /** The bytes just written (desktop) — lets the caller refresh the Recent entry
+   *  so reopening from Recent reads the file we actually saved, not the original. */
+  bytes?: ArrayBuffer
   /** On a native app, where the file was written (so the UI can confirm/share it). */
   saved?: NativeSaveResult
 }
@@ -796,7 +799,7 @@ export async function saveWorkbookAs(
       bytes: Array.from(new Uint8Array(buf)),
     })) as string | null
     if (!path) return undefined // user cancelled the dialog
-    return { handle: null, name: basename(path), path }
+    return { handle: null, name: basename(path), path, bytes: buf }
   }
 
   // Chromium: File System Access picker (returns a reusable writable handle).

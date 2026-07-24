@@ -11,7 +11,7 @@ import DataValidationPanel from './components/DataValidationPanel'
 import ShortcutsHelp from './components/ShortcutsHelp'
 import Toast from './components/Toast'
 import { useStore } from './store/useStore'
-import { clearCachedDoc } from './lib/recentFiles'
+import { addRecentFile, clearCachedDoc } from './lib/recentFiles'
 import { iterateMultiSelection } from './lib/utils'
 import {
   exportWorkbook,
@@ -88,12 +88,18 @@ export default function App() {
               if (store.filePath) {
                 const fmt = store.filePath.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx'
                 await saveWorkbookToPath(store.hf, store.sheets, store.filePath, fmt, store.charts)
+                // Keep the Recent entry pointing at this path (dedup by name) so
+                // reopening from Recent reads the file we just wrote.
+                addRecentFile(store.fileName, new ArrayBuffer(0), { path: store.filePath })
                 return
               }
               const res = await saveWorkbookAs(store.hf, store.sheets, store.fileName, 'xlsx', store.charts)
               if (res) {
                 useStore.setState({ fileName: res.name })
-                if (res.path) useStore.getState().setFilePath(res.path)
+                if (res.path) {
+                  useStore.getState().setFilePath(res.path)
+                  addRecentFile(res.name, res.bytes ?? new ArrayBuffer(0), { path: res.path })
+                }
               }
             } catch (err) {
               onErr(err as Error)

@@ -24,9 +24,11 @@ if ('serviceWorker' in navigator) {
 if (import.meta.env.DEV) {
   ;(window as unknown as { store: typeof useStore }).store = useStore
   ;(window as unknown as { settings: typeof useSettingsStore }).settings = useSettingsStore
-  Promise.all([import('./lib/fileIO'), import('xlsx')]).then(([io, xlsx]) => {
-    Object.assign(window as object, { fileIO: io, XLSX: xlsx })
-  })
+  Promise.all([import('./lib/fileIO'), import('./lib/recentFiles'), import('xlsx')]).then(
+    ([io, recent, xlsx]) => {
+      Object.assign(window as object, { fileIO: io, recentFiles: recent, XLSX: xlsx })
+    },
+  )
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

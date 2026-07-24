@@ -167,6 +167,12 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Fix (desktop): **saving now updates Recent files.** Save As / "Save as
+  xlsx·csv" / Cmd+S all call `addRecentFile` with the path just written; since
+  Recent dedups by name, the stale entry is replaced. Before, saving to a new
+  location left Recent pointing at the originally-opened file, so reopening it
+  showed pre-save content. `saveWorkbookAs` now returns the written `bytes`;
+  `save()` on desktop routes through it to capture the chosen path.
 - Removed the **PWA** (vite-plugin-pwa): no service worker / web manifest. The
   web build is a plain web app; desktop/mobile bundle `dist/` locally and are
   unaffected. `main.tsx` unregisters any worker + clears caches a prior version
