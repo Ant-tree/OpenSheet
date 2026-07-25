@@ -803,18 +803,28 @@ table.grid {
   opacity: 1;
   color: #d93025;
 }
-.sheet-tab .rename {
-  opacity: 0.45;
+.sheet-tab-name {
+  pointer-events: none; /* clicks fall through to the tab (switch/drag) */
+}
+.sheet-tab .tab-menu-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.5;
+  font-size: 15px;
   line-height: 1;
-  display: inline-flex;
+  padding: 0 2px;
 }
-.sheet-tab .rename svg {
-  width: 13px;
-  height: 13px;
-}
-.sheet-tab .rename:hover {
+.sheet-tab .tab-menu-btn:hover {
   opacity: 1;
   color: var(--accent);
+}
+.tab-menu {
+  min-width: 140px;
+}
+.tab-menu .menu-item.danger {
+  color: #d93025;
 }
 .add-sheet {
   min-width: 28px;

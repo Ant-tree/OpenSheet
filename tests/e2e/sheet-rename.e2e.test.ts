@@ -27,7 +27,7 @@ const activeName = (page: Page) =>
   })
 
 describe('sheet rename (in-app modal, not window.prompt)', () => {
-  test('the rename ✎ affordance opens a modal that renames the sheet', async () => {
+  test('the ⋯ menu opens a modal that renames the sheet', async () => {
     const page = await openApp()
     // window.prompt is unavailable in the Tauri/Android WebViews; make sure the
     // flow never depends on it (throw if anything calls it).
@@ -37,7 +37,8 @@ describe('sheet rename (in-app modal, not window.prompt)', () => {
       }
     })
 
-    await page.locator('.sheet-tab .rename').first().click()
+    await page.locator('.sheet-tab .tab-menu-btn').first().click()
+    await page.locator('.tab-menu .menu-item', { hasText: 'Rename sheet' }).click()
     await page.waitForSelector('.saveas-modal .saveas-input')
     await page.fill('.saveas-modal .saveas-input', 'Budget')
     await page.click('.saveas-modal .saveas-btn.primary')
@@ -61,7 +62,8 @@ describe('sheet rename (in-app modal, not window.prompt)', () => {
   test('Escape / empty name leaves the sheet name unchanged', async () => {
     const page = await openApp()
     const before = await activeName(page)
-    await page.locator('.sheet-tab .rename').first().click()
+    await page.locator('.sheet-tab .tab-menu-btn').first().click()
+    await page.locator('.tab-menu .menu-item', { hasText: 'Rename sheet' }).click()
     await page.waitForSelector('.saveas-modal .saveas-input')
     await page.fill('.saveas-modal .saveas-input', '   ')
     await page.click('.saveas-modal .saveas-btn.primary')

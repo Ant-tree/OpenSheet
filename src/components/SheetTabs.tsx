@@ -13,12 +13,16 @@ export default function SheetTabs() {
   const addSheet = useStore((s) => s.addSheet)
   const removeSheet = useStore((s) => s.removeSheet)
   const renameSheet = useStore((s) => s.renameSheet)
+  const duplicateSheet = useStore((s) => s.duplicateSheet)
   const moveSheet = useStore((s) => s.moveSheet)
 
   // Rename via an in-app modal (not window.prompt): the Tauri desktop WebView and
   // the Android WebView don't support window.prompt, so a double-click there did
   // nothing. This modal works on every platform, touch included.
   const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null)
+  // Per-tab actions live in a single ⋯ dropdown so the tab body stays a reliable
+  // click/drag target (three inline icons pushed the tab's center onto an icon).
+  const [menu, setMenu] = useState<{ id: number; x: number; y: number } | null>(null)
 
   // Drag-to-reorder. Uses Pointer Events (mouse + touch + pen in one path); the
   // tabs carry `touch-action: none` (CSS) so a horizontal drag on a tab is a
@@ -30,8 +34,8 @@ export default function SheetTabs() {
   const [dragId, setDragId] = useState<number | null>(null)
 
   const onTabPointerDown = (e: React.PointerEvent, id: number) => {
-    // Let the rename/close controls handle their own clicks.
-    if ((e.target as HTMLElement).closest('.rename, .close')) return
+    // Let the ⋯ menu button handle its own clicks.
+    if ((e.target as HTMLElement).closest('.tab-menu-btn')) return
     if (e.pointerType === 'mouse' && e.button !== 0) return
     drag.current = { id, pointerId: e.pointerId, startX: e.clientX, moved: false }
   }
@@ -78,6 +82,7 @@ export default function SheetTabs() {
   }, [activeSheetId, sheets.length])
 
   const multi = sheets.length > 1
+  const menuSheet = menu && sheets.find((s) => s.id === menu.id)
 
   return (
     <div className="sheet-tabs">
@@ -116,29 +121,19 @@ export default function SheetTabs() {
             onPointerCancel={endDrag}
             title={t('renameHint')}
           >
-            {s.name}
-            <span
-              className="rename"
-              title={t('renameSheetTitle')}
+            <span className="sheet-tab-name">{s.name}</span>
+            <button
+              className="tab-menu-btn"
+              title={t('sheetOptions')}
+              aria-label={t('sheetOptions')}
               onClick={(e) => {
                 e.stopPropagation()
-                setRenaming({ id: s.id, name: s.name })
+                const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                setMenu((cur) => (cur?.id === s.id ? null : { id: s.id, x: r.right, y: r.bottom }))
               }}
             >
-              <Icon name="edit" />
-            </span>
-            {multi && (
-              <span
-                className="close"
-                title={t('deleteSheet')}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (confirm(t('deleteSheetConfirm').replace('{name}', s.name))) removeSheet(s.id)
-                }}
-              >
-                <Icon name="close" />
-              </span>
-            )}
+              ⋯
+            </button>
           </div>
         ))}
         <button className="add-sheet" title={t('addSheet')} onClick={addSheet}>
@@ -153,6 +148,35 @@ export default function SheetTabs() {
       >
         ›
       </button>
+      {menu && menuSheet && (
+        <TabMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            {
+              label: t('renameSheetTitle'),
+              onClick: () => setRenaming({ id: menuSheet.id, name: menuSheet.name }),
+            },
+            {
+              label: t('duplicateSheet'),
+              onClick: () => duplicateSheet(menuSheet.id),
+            },
+            ...(multi
+              ? [
+                  {
+                    label: t('deleteSheet'),
+                    danger: true,
+                    onClick: () => {
+                      if (confirm(t('deleteSheetConfirm').replace('{name}', menuSheet.name)))
+                        removeSheet(menuSheet.id)
+                    },
+                  },
+                ]
+              : []),
+          ]}
+        />
+      )}
       {renaming && (
         <RenameDialog
           initial={renaming.name}
@@ -168,6 +192,56 @@ export default function SheetTabs() {
         />
       )}
     </div>
+  )
+}
+
+/** Small dropdown of per-tab actions, anchored under the ⋯ button. */
+function TabMenu({
+  x,
+  y,
+  items,
+  onClose,
+}: {
+  x: number
+  y: number
+  items: { label: string; danger?: boolean; onClick: () => void }[]
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const close = () => onClose()
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', close)
+    }
+  }, [onClose])
+  const left = Math.min(x, window.innerWidth - 160)
+  const top = Math.min(y, window.innerHeight - 20 - items.length * 34)
+  return createPortal(
+    <div
+      className="dropdown-menu tab-menu"
+      style={{ top, left }}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      {items.map((it) => (
+        <button
+          key={it.label}
+          className={`menu-item${it.danger ? ' danger' : ''}`}
+          onClick={() => {
+            it.onClick()
+            onClose()
+          }}
+        >
+          {it.label}
+        </button>
+      ))}
+    </div>,
+    document.body,
   )
 }
 

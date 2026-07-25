@@ -189,6 +189,18 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Feature: **duplicate sheet** — `duplicateSheet(id)` copies HF contents
+  (`setSheetContent`) + a deep-cloned `SheetMeta` (formats/merges/notes/links/
+  sparklines/etc.) + charts into a new `"<name> (2)"` sheet placed right after the
+  source. Structural change, so it clears undo history (like add/remove sheet).
+- Feature: **copy/paste now carries merged cells.** The in-app clipboard stores
+  merges relative to the copied block's top-left; `pasteText`/`pasteFormatsOnly`
+  recreate them at the paste origin (`pasteMerges` helper drops overlapped
+  existing merges, skips out-of-bounds).
+- Change: **sheet-tab actions moved into a single ⋯ dropdown** (Rename /
+  Duplicate / Delete). Three inline icons had pushed the tab's click/drag center
+  onto an icon, so tapping to switch sometimes fired an action. The tab body is
+  now a clean switch/drag target; `.sheet-tab-name` has `pointer-events:none`.
 - Feature: **drag-to-reorder sheet tabs** — `moveSheet(id, toIndex)` in the store;
   `SheetTabs.tsx` reorders live via Pointer Events (mouse + touch + pen in one
   path). Tabs carry `touch-action: none` so a horizontal drag reorders instead of

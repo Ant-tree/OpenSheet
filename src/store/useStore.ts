@@ -58,8 +58,13 @@ interface Snapshot {
   selection: Selection
 }
 
-/** Copied block, kept in-module so pasting can restore formats too. */
-let clipboard: { rows: string[][]; formats: (CellFormat | undefined)[][] } | null = null
+/** Copied block, kept in-module so pasting can restore formats + merges too.
+ *  `merges` are stored relative to the copied block's top-left corner. */
+let clipboard: {
+  rows: string[][]
+  formats: (CellFormat | undefined)[][]
+  merges: MergeRange[]
+} | null = null
 
 /** localStorage key for the last opened/saved desktop (Tauri) file path. */
 const FILE_PATH_KEY = 'opensheet.filePath'
@@ -218,6 +223,8 @@ interface StoreState {
 
   addSheet: () => void
   removeSheet: (id: number) => void
+  /** Duplicate a sheet (contents + all formatting/merges/etc.) as a new sheet. */
+  duplicateSheet: (id: number) => void
   renameSheet: (id: number, name: string) => void
   setActiveSheet: (id: number) => void
   /** Switch to the sheet `delta` positions away (e.g. -1 prev, +1 next). Wraps around. */
@@ -1003,6 +1010,40 @@ export const useStore = create<StoreState>((set, get) => {
       bump(set)
     },
 
+    duplicateSheet(id) {
+      const { hf, sheets, charts } = get()
+      const srcIdx = sheets.findIndex((s) => s.id === id)
+      if (srcIdx === -1) return
+      const src = sheets[srcIdx]
+      // Unique "<name> (2)" copy name, incrementing until free.
+      let n = 2
+      let name = `${src.name} (${n})`
+      while (hf.doesSheetExist(name)) name = `${src.name} (${++n})`
+      hf.addSheet(name)
+      const newId = hf.getSheetId(name)!
+      hf.setSheetContent(newId, hf.getSheetSerialized(id) as CellValue[][])
+      const meta: SheetMeta = { ...cloneMeta(src), id: newId, name }
+      const nextSheets = [...sheets]
+      nextSheets.splice(srcIdx + 1, 0, meta) // place the copy right after the source
+      const nextCharts = { ...charts }
+      if (charts[id]?.length) {
+        nextCharts[newId] = charts[id].map((c) => ({ ...c, id: `${c.id}-copy${newId}` }))
+      }
+      set({
+        sheets: nextSheets,
+        charts: nextCharts,
+        activeSheetId: newId,
+        selection: { anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } },
+        filterHeaderRow: null,
+        filterCols: [],
+        columnFilters: {},
+        // Structural sheet-set changes don't fit the snapshot undo model.
+        past: [],
+        future: [],
+      })
+      bump(set)
+    },
+
     removeSheet(id) {
       const { hf, sheets } = get()
       if (sheets.length <= 1) return
@@ -1201,7 +1242,16 @@ export const useStore = create<StoreState>((set, get) => {
         rows.push(rowV)
         formats.push(rowF)
       }
-      clipboard = { rows, formats }
+      // Capture merges fully inside the copied block, relative to its top-left.
+      const merges = sheet.merges
+        .filter((m) => m.top >= b.top && m.left >= b.left && m.bottom <= b.bottom && m.right <= b.right)
+        .map((m) => ({
+          top: m.top - b.top,
+          left: m.left - b.left,
+          bottom: m.bottom - b.top,
+          right: m.right - b.left,
+        }))
+      clipboard = { rows, formats, merges }
       return rows.map((r) => r.join('\t')).join('\n')
     },
 
@@ -1384,7 +1434,10 @@ export const useStore = create<StoreState>((set, get) => {
           maxC = Math.max(maxC, c)
         })
       })
-      if (internal) updateSheet(set, get, sheet.id, { formats })
+      if (internal) {
+        const merges = pasteMerges(sheet.merges, internal.merges, row, col)
+        updateSheet(set, get, sheet.id, { formats, merges })
+      }
       set({ selection: { anchor: { row, col }, focus: { row: maxR, col: maxC } } })
       bump(set)
     },
@@ -1437,7 +1490,8 @@ export const useStore = create<StoreState>((set, get) => {
           maxC = Math.max(maxC, c)
         }),
       )
-      updateSheet(set, get, sheet.id, { formats })
+      const merges = pasteMerges(sheet.merges, clipboard.merges, row, col)
+      updateSheet(set, get, sheet.id, { formats, merges })
       set({ selection: { anchor: { row, col }, focus: { row: maxR, col: maxC } } })
       bump(set)
     },
@@ -1501,6 +1555,29 @@ function updateSheet(
 
 function overlaps(a: MergeRange, b: MergeRange): boolean {
   return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom)
+}
+
+/** Merge the copied (relative) merges into `existing`, offset to the paste
+ *  origin (row,col). Drops existing merges that would overlap a pasted one so
+ *  the result stays non-overlapping. Out-of-bounds pasted merges are skipped. */
+function pasteMerges(
+  existing: MergeRange[],
+  relative: MergeRange[],
+  row: number,
+  col: number,
+): MergeRange[] {
+  if (!relative.length) return existing
+  const pasted = relative
+    .map((m) => ({
+      top: m.top + row,
+      left: m.left + col,
+      bottom: m.bottom + row,
+      right: m.right + col,
+    }))
+    .filter((m) => m.bottom < MAX_ROWS && m.right < MAX_COLS)
+  if (!pasted.length) return existing
+  const kept = existing.filter((m) => !pasted.some((p) => overlaps(m, p)))
+  return [...kept, ...pasted]
 }
 
 // --- row/column insert/delete: shift metadata keyed by index ---
