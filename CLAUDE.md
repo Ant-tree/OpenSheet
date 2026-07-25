@@ -198,11 +198,13 @@ off on the web, so web tests confirm no regressions there; native shells
   recreate them at the paste origin (`pasteMerges` helper drops overlapped
   existing merges, skips out-of-bounds).
 - Change: **sheet-tab actions moved into a single ⋯ dropdown** (Rename /
-  Duplicate / Delete), also opened by **right-click** on desktop (touch keeps the
-  ⋯ button since it has no right-click). Three inline icons had pushed the tab's
+  Duplicate / Delete), opened by the ⋯ button, **right-click** (desktop), or a
+  **long-press** (touch, 500ms). Three inline icons had pushed the tab's
   click/drag center onto an icon, so tapping to switch sometimes fired an action.
   The tab body is now a clean switch/drag target; `.sheet-tab-name` has
-  `pointer-events:none`.
+  `pointer-events:none`. Click-suppression after a drag/long-press is a
+  timestamp (`suppressClickUntil`) so a stale flag never eats the next tab tap;
+  the menu ignores the synthesized post-long-press event for 350ms (gotcha #4).
 - Feature: **drag-to-reorder sheet tabs** — `moveSheet(id, toIndex)` in the store;
   `SheetTabs.tsx` reorders live via Pointer Events (mouse + touch + pen in one
   path). Tabs carry `touch-action: none` so a horizontal drag reorders instead of

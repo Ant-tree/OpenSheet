@@ -782,6 +782,10 @@ table.grid {
   /* A horizontal drag on a tab reorders it (pointer-events handler) rather than
      scrolling the strip; a tap still fires click to switch sheets. */
   touch-action: none;
+  /* A long-press opens the tab menu; suppress iOS text-selection + callout. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .sheet-tab.dragging {
   opacity: 0.6;

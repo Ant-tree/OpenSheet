@@ -30,14 +30,37 @@ export default function SheetTabs() {
   // reorder live as the pointer crosses each tab's midpoint.
   const scrollRef = useRef<HTMLDivElement>(null)
   const drag = useRef<{ id: number; pointerId: number; startX: number; moved: boolean } | null>(null)
-  const justDragged = useRef(false)
+  // Ignore the tab's click (switch) until this time — set after a drag or a
+  // long-press so the trailing (possibly synthesized) click doesn't also fire.
+  const suppressClickUntil = useRef(0)
+  const longPress = useRef<number | null>(null)
   const [dragId, setDragId] = useState<number | null>(null)
+
+  const clearLongPress = () => {
+    if (longPress.current !== null) {
+      clearTimeout(longPress.current)
+      longPress.current = null
+    }
+  }
 
   const onTabPointerDown = (e: React.PointerEvent, id: number) => {
     // Let the ⋯ menu button handle its own clicks.
     if ((e.target as HTMLElement).closest('.tab-menu-btn')) return
     if (e.pointerType === 'mouse' && e.button !== 0) return
     drag.current = { id, pointerId: e.pointerId, startX: e.clientX, moved: false }
+    // Touch/pen: a stationary long-press opens the tab menu (no right-click there).
+    if (e.pointerType !== 'mouse') {
+      const x = e.clientX
+      const y = e.clientY
+      clearLongPress()
+      longPress.current = window.setTimeout(() => {
+        longPress.current = null
+        drag.current = null // cancel any pending reorder
+        setDragId(null)
+        suppressClickUntil.current = Date.now() + 800 // swallow the trailing tap
+        setMenu({ id, x, y })
+      }, 500)
+    }
   }
 
   const onTabPointerMove = (e: React.PointerEvent) => {
@@ -46,6 +69,7 @@ export default function SheetTabs() {
     if (!d.moved) {
       if (Math.abs(e.clientX - d.startX) < 6) return
       d.moved = true
+      clearLongPress() // a drag, not a long-press
       setDragId(d.id)
       ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
     }
@@ -65,10 +89,11 @@ export default function SheetTabs() {
   }
 
   const endDrag = (e: React.PointerEvent) => {
+    clearLongPress()
     const d = drag.current
     if (!d || d.pointerId !== e.pointerId) return
     // A drag that moved should not also fire the tab's click (switch sheet).
-    justDragged.current = d.moved
+    if (d.moved) suppressClickUntil.current = Date.now() + 400
     drag.current = null
     setDragId(null)
   }
@@ -108,10 +133,7 @@ export default function SheetTabs() {
             // onClick (not onMouseDown) fires reliably from a touch tap even
             // inside this horizontally-scrollable strip.
             onClick={() => {
-              if (justDragged.current) {
-                justDragged.current = false
-                return
-              }
+              if (Date.now() < suppressClickUntil.current) return
               setActiveSheet(s.id)
             }}
             onDoubleClick={() => setRenaming({ id: s.id, name: s.name })}
@@ -214,7 +236,14 @@ function TabMenu({
   onClose: () => void
 }) {
   useEffect(() => {
-    const close = () => onClose()
+    // Ignore the synthesized mouse event Android/iOS fire ~300ms after a
+    // long-press release, which would otherwise close the menu the instant it
+    // opened (gotcha #4). Real outside taps after that window close it.
+    const openedAt = Date.now()
+    const close = () => {
+      if (Date.now() - openedAt < 350) return
+      onClose()
+    }
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('pointerdown', close)
     window.addEventListener('keydown', onKey)
