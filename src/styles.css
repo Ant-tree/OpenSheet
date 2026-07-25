@@ -779,6 +779,13 @@ table.grid {
   display: flex;
   align-items: center;
   gap: 6px;
+  /* A horizontal drag on a tab reorders it (pointer-events handler) rather than
+     scrolling the strip; a tap still fires click to switch sheets. */
+  touch-action: none;
+}
+.sheet-tab.dragging {
+  opacity: 0.6;
+  cursor: grabbing;
 }
 .sheet-tab.active {
   background: var(--cell-bg);

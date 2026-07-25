@@ -222,6 +222,8 @@ interface StoreState {
   setActiveSheet: (id: number) => void
   /** Switch to the sheet `delta` positions away (e.g. -1 prev, +1 next). Wraps around. */
   moveActiveSheet: (delta: number) => void
+  /** Reorder: move the sheet with `id` to position `toIndex` in the tab strip. */
+  moveSheet: (id: number, toIndex: number) => void
 
   /** Insert a chart onto the active sheet. */
   addChart: (spec: Omit<ChartSpec, 'id'>) => void
@@ -1047,6 +1049,20 @@ export const useStore = create<StoreState>((set, get) => {
       if (idx === -1) return
       const nextIdx = (idx + delta + sheets.length) % sheets.length
       get().setActiveSheet(sheets[nextIdx].id)
+    },
+
+    moveSheet(id, toIndex) {
+      const { sheets } = get()
+      const from = sheets.findIndex((s) => s.id === id)
+      if (from === -1) return
+      const to = Math.max(0, Math.min(toIndex, sheets.length - 1))
+      if (to === from) return
+      pushUndo(set, get)
+      const next = [...sheets]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      set({ sheets: next })
+      bump(set)
     },
 
     addChart(spec) {

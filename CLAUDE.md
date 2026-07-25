@@ -189,6 +189,15 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Feature: **drag-to-reorder sheet tabs** — `moveSheet(id, toIndex)` in the store;
+  `SheetTabs.tsx` reorders live via Pointer Events (mouse + touch + pen in one
+  path). Tabs carry `touch-action: none` so a horizontal drag reorders instead of
+  scrolling the strip, while a tap still fires click → switch sheet (a `moved`
+  flag suppresses the post-drag click).
+- Fix: **sheet rename now works on desktop/mobile apps.** It used `window.prompt`,
+  which the Tauri and Android WebViews don't support (double-click did nothing).
+  Replaced with an in-app modal (`RenameDialog`, styled like the Save-As dialog)
+  and added a per-tab ✎ affordance so touch users can rename without a double-tap.
 - Feature: **in-cell sparklines** — a `SheetMeta.sparklines[]` overlay (line or
   column) drawn from a source range. Toolbar "Sparkline" dropdown places one in
   the cell just past the selection (below a column-shaped range, right of a
