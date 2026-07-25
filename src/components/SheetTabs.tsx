@@ -115,6 +115,12 @@ export default function SheetTabs() {
               setActiveSheet(s.id)
             }}
             onDoubleClick={() => setRenaming({ id: s.id, name: s.name })}
+            onContextMenu={(e) => {
+              // Desktop convention: right-click opens the tab menu at the cursor.
+              // (Touch has no right-click — the ⋯ button covers it there.)
+              e.preventDefault()
+              setMenu({ id: s.id, x: e.clientX, y: e.clientY })
+            }}
             onPointerDown={(e) => onTabPointerDown(e, s.id)}
             onPointerMove={onTabPointerMove}
             onPointerUp={endDrag}

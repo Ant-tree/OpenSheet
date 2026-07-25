@@ -53,6 +53,15 @@ describe('duplicate sheet', () => {
     await page.close()
   })
 
+  test('right-clicking a tab opens the same menu (desktop)', async () => {
+    const page = await openApp()
+    await page.locator('.sheet-tab').first().click({ button: 'right' })
+    await page.waitForSelector('.tab-menu')
+    await page.locator('.tab-menu .menu-item', { hasText: 'Duplicate sheet' }).click()
+    await page.waitForFunction(() => (window as any).store.getState().sheets.length === 2)
+    await page.close()
+  })
+
   test('editing the copy does not change the original', async () => {
     const page = await openApp()
     await page.evaluate(() => {
