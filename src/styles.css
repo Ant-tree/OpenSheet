@@ -796,6 +796,19 @@ table.grid {
   opacity: 1;
   color: #d93025;
 }
+.sheet-tab .rename {
+  opacity: 0.45;
+  line-height: 1;
+  display: inline-flex;
+}
+.sheet-tab .rename svg {
+  width: 13px;
+  height: 13px;
+}
+.sheet-tab .rename:hover {
+  opacity: 1;
+  color: var(--accent);
+}
 .add-sheet {
   min-width: 28px;
   height: 26px;
