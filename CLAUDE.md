@@ -189,6 +189,11 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Feature: **drag-to-move a cell block** — grab the selection's outer border
+  (thin `.move-edge` strips on the perimeter cells, mouse only, multi-cell
+  selections) and drop it elsewhere; a dashed `.move-preview` shows the target.
+  `moveRange(src, dest)` uses HF `moveCells` (adjusts formula references) then
+  remaps formats/notes/links/merges by the delta and clears the source.
 - Feature: **duplicate sheet** — `duplicateSheet(id)` copies HF contents
   (`setSheetContent`) + a deep-cloned `SheetMeta` (formats/merges/notes/links/
   sparklines/etc.) + charts into a new `"<name> (2)"` sheet placed right after the

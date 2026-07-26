@@ -614,6 +614,42 @@ table.grid {
   cursor: crosshair;
   z-index: 6;
 }
+/* Drag-move grab strips along the selection's outer border (mouse only). Thin
+   bands that show a move cursor; the cell interior stays a normal click target. */
+.move-edge {
+  position: absolute;
+  z-index: 5;
+  cursor: move;
+}
+.move-edge.top {
+  top: -2px;
+  left: 0;
+  right: 0;
+  height: 5px;
+}
+.move-edge.bottom {
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 5px;
+}
+.move-edge.left {
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  width: 5px;
+}
+.move-edge.right {
+  top: 0;
+  bottom: 0;
+  right: -2px;
+  width: 5px;
+}
+/* Where the dragged block will land. */
+.cell.move-preview {
+  outline: 2px dashed var(--select-border);
+  outline-offset: -2px;
+}
 .cell.active {
   outline: 2px solid var(--select-border);
   outline-offset: -2px;

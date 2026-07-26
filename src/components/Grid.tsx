@@ -432,6 +432,12 @@ export default function Grid() {
   const filling = useRef(false)
   const fillSource = useRef<MergeRange | null>(null)
   const fillTargetRef = useRef<MergeRange | null>(null)
+  // Drag-move (grab the selection border and drop the block elsewhere).
+  const [moveTarget, setMoveTarget] = useState<MergeRange | null>(null)
+  const moving = useRef(false)
+  const moveSource = useRef<MergeRange | null>(null)
+  const moveGrab = useRef<{ row: number; col: number } | null>(null)
+  const moveTargetRef = useRef<MergeRange | null>(null)
   // Coalesce drag updates to one per animation frame so fast pointer moves don't
   // trigger a grid re-render per crossed cell.
   const dragRaf = useRef<number | null>(null)
@@ -720,7 +726,37 @@ export default function Grid() {
     filling.current = true
     setFillTarget(b)
   }
+  const onMoveStart = (row: number, col: number, e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const b = selectionBounds(useStore.getState().selection)
+    moveSource.current = b
+    moveTargetRef.current = b
+    moveGrab.current = { row, col }
+    moving.current = true
+    setMoveTarget(b)
+  }
   const onCellMouseEnter = (row: number, col: number) => {
+    if (moving.current && moveSource.current && moveGrab.current) {
+      const src = moveSource.current
+      const g = moveGrab.current
+      // Shift the block by the drag delta, clamped so it stays on the grid.
+      const h = src.bottom - src.top
+      const w = src.right - src.left
+      let dRow = row - g.row
+      let dCol = col - g.col
+      dRow = Math.max(-src.top, Math.min(dRow, MAX_ROWS - 1 - src.bottom))
+      dCol = Math.max(-src.left, Math.min(dCol, MAX_COLS - 1 - src.right))
+      const tgt: MergeRange = {
+        top: src.top + dRow,
+        bottom: src.top + dRow + h,
+        left: src.left + dCol,
+        right: src.left + dCol + w,
+      }
+      moveTargetRef.current = tgt
+      scheduleDrag(() => setMoveTarget(tgt))
+      return
+    }
     if (filling.current && fillSource.current) {
       const src = fillSource.current
       const dRow = row < src.top ? row - src.top : row > src.bottom ? row - src.bottom : 0
@@ -745,7 +781,18 @@ export default function Grid() {
   }
   useEffect(() => {
     const up = () => {
-      if (filling.current) {
+      if (moving.current) {
+        const src = moveSource.current
+        const tgt = moveTargetRef.current
+        if (src && tgt && (tgt.top !== src.top || tgt.left !== src.left)) {
+          useStore.getState().moveRange(src, { row: tgt.top, col: tgt.left })
+        }
+        moving.current = false
+        moveSource.current = null
+        moveGrab.current = null
+        moveTargetRef.current = null
+        setMoveTarget(null)
+      } else if (filling.current) {
         const src = fillSource.current
         const tgt = fillTargetRef.current
         if (
@@ -1208,6 +1255,25 @@ export default function Grid() {
                   c <= fillTarget.right &&
                   !selected
                 const isFillCorner = !isEditing && r === bounds.bottom && c === bounds.right
+                // Drag-move: the selection's border is a grab handle (mouse only,
+                // primary contiguous multi-cell selection). The dashed preview
+                // marks where the block will land.
+                const inMove =
+                  !!moveTarget &&
+                  r >= moveTarget.top &&
+                  r <= moveTarget.bottom &&
+                  c >= moveTarget.left &&
+                  c <= moveTarget.right
+                const movable =
+                  !IS_COARSE &&
+                  !isEditing &&
+                  extraRanges.length === 0 &&
+                  isInSelection(r, c, selection) &&
+                  (bounds.top !== bounds.bottom || bounds.left !== bounds.right)
+                const edgeTop = movable && r === bounds.top
+                const edgeBottom = movable && r === bounds.bottom
+                const edgeLeft = movable && c === bounds.left
+                const edgeRight = movable && c === bounds.right
                 const fmt = sheet.formats[k]
                 const note = sheet.notes[k]
                 const link = sheet.links?.[k]
@@ -1226,7 +1292,19 @@ export default function Grid() {
                 }
                 const dataBar = content.dataBar
                 const checkbox = content.checkbox
-                if (isFillCorner || note || link || spark || isFilterHeader || dataBar || checkbox)
+                if (
+                  isFillCorner ||
+                  note ||
+                  link ||
+                  spark ||
+                  isFilterHeader ||
+                  dataBar ||
+                  checkbox ||
+                  edgeTop ||
+                  edgeBottom ||
+                  edgeLeft ||
+                  edgeRight
+                )
                   style.position = 'relative'
                 const frozenR = r < frozenRows
                 const frozenC = c < frozenCols
@@ -1247,7 +1325,9 @@ export default function Grid() {
                     colSpan={merge ? merge.right - merge.left + 1 : undefined}
                     className={`cell${selected ? ' selected' : ''}${isActive ? ' active' : ''}${
                       inFill ? ' fill-preview' : ''
-                    }${isNum && !fmt?.align ? ' num' : ''}${link ? ' has-link' : ''}`}
+                    }${inMove ? ' move-preview' : ''}${isNum && !fmt?.align ? ' num' : ''}${
+                      link ? ' has-link' : ''
+                    }`}
                     style={style}
                     data-r={r}
                     data-c={c}
@@ -1370,6 +1450,18 @@ export default function Grid() {
                     )}
                     {isFillCorner && (
                       <div className="fill-handle" onMouseDown={onFillStart} />
+                    )}
+                    {edgeTop && (
+                      <div className="move-edge top" onMouseDown={(e) => onMoveStart(r, c, e)} />
+                    )}
+                    {edgeBottom && (
+                      <div className="move-edge bottom" onMouseDown={(e) => onMoveStart(r, c, e)} />
+                    )}
+                    {edgeLeft && (
+                      <div className="move-edge left" onMouseDown={(e) => onMoveStart(r, c, e)} />
+                    )}
+                    {edgeRight && (
+                      <div className="move-edge right" onMouseDown={(e) => onMoveStart(r, c, e)} />
                     )}
                   </td>
                 )

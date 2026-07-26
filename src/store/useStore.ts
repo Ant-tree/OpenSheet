@@ -209,6 +209,9 @@ interface StoreState {
   replaceAll: (find: string, repl: string) => number
   /** Auto-fill: extend the `src` block over `tgt` (series for numbers, else copy). */
   fillRange: (src: MergeRange, tgt: MergeRange) => void
+  /** Drag-move the `src` block so its top-left lands at `dest` (contents + formats
+   *  + merges/notes/links); adjusts formula references and clears the source. */
+  moveRange: (src: MergeRange, dest: { row: number; col: number }) => void
   /** Fill the selection's top row down over the rest of the selection (Ctrl+D). */
   fillDown: () => void
   /** Fill the selection's left column right over the rest of the selection (Ctrl+R). */
@@ -1352,6 +1355,78 @@ export const useStore = create<StoreState>((set, get) => {
         }
       }
       updateSheet(set, get, sheet.id, { formats })
+      bump(set)
+    },
+
+    moveRange(src, dest) {
+      const { hf, activeSheetId } = get()
+      const sheet = get().activeSheet()
+      const height = src.bottom - src.top + 1
+      const width = src.right - src.left + 1
+      const dRow = dest.row - src.top
+      const dCol = dest.col - src.left
+      if (dRow === 0 && dCol === 0) return
+      if (dest.row < 0 || dest.col < 0 || dest.row + height > MAX_ROWS || dest.col + width > MAX_COLS)
+        return
+      const source = {
+        start: { sheet: activeSheetId, row: src.top, col: src.left },
+        end: { sheet: activeSheetId, row: src.bottom, col: src.right },
+      }
+      const corner = { sheet: activeSheetId, row: dest.row, col: dest.col }
+      if (!hf.isItPossibleToMoveCells(source, corner)) return
+      pushUndo(set, get)
+      // Moves values AND adjusts formulas that reference the moved cells.
+      hf.moveCells(source, corner)
+
+      const destRange: MergeRange = {
+        top: dest.row,
+        left: dest.col,
+        bottom: dest.row + height - 1,
+        right: dest.col + width - 1,
+      }
+      const inSrc = (r: number, c: number) =>
+        r >= src.top && r <= src.bottom && c >= src.left && c <= src.right
+      const inDst = (r: number, c: number) =>
+        r >= destRange.top && r <= destRange.bottom && c >= destRange.left && c <= destRange.right
+      // Remap per-cell metadata: drop entries in the source + destination areas,
+      // then re-place the source entries shifted by the move delta.
+      const remap = <T,>(rec: Record<string, T> | undefined): Record<string, T> | undefined => {
+        if (!rec) return rec
+        const out: Record<string, T> = {}
+        for (const k in rec) {
+          const [r, c] = k.split(',').map(Number)
+          if (inSrc(r, c) || inDst(r, c)) continue
+          out[k] = rec[k]
+        }
+        for (const k in rec) {
+          const [r, c] = k.split(',').map(Number)
+          if (inSrc(r, c)) out[key(r + dRow, c + dCol)] = rec[k]
+        }
+        return out
+      }
+      const withinSrc = (m: MergeRange) =>
+        m.top >= src.top && m.left >= src.left && m.bottom <= src.bottom && m.right <= src.right
+      const merges = [
+        ...sheet.merges.filter((m) => !withinSrc(m) && !overlaps(m, destRange)),
+        ...sheet.merges.filter(withinSrc).map((m) => ({
+          top: m.top + dRow,
+          left: m.left + dCol,
+          bottom: m.bottom + dRow,
+          right: m.right + dCol,
+        })),
+      ]
+      updateSheet(set, get, sheet.id, {
+        formats: remap(sheet.formats)!,
+        notes: remap(sheet.notes)!,
+        links: remap(sheet.links),
+        merges,
+      })
+      set({
+        selection: {
+          anchor: { row: destRange.top, col: destRange.left },
+          focus: { row: destRange.bottom, col: destRange.right },
+        },
+      })
       bump(set)
     },
 
