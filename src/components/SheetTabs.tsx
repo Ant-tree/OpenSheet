@@ -48,6 +48,10 @@ export default function SheetTabs() {
     if ((e.target as HTMLElement).closest('.tab-menu-btn')) return
     if (e.pointerType === 'mouse' && e.button !== 0) return
     drag.current = { id, pointerId: e.pointerId, startX: e.clientX, moved: false }
+    // Capture immediately so every pointermove/up lands on THIS tab, even once the
+    // pointer moves over sibling tabs or off the strip — otherwise a real drag
+    // loses events (the DOM reorders under the pointer) and never reorders.
+    ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
     // Touch/pen: a stationary long-press opens the tab menu (no right-click there).
     if (e.pointerType !== 'mouse') {
       const x = e.clientX
@@ -71,7 +75,6 @@ export default function SheetTabs() {
       d.moved = true
       clearLongPress() // a drag, not a long-press
       setDragId(d.id)
-      ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
     }
     // Find the tab whose horizontal midpoint the pointer is past, and move there.
     const tabs = Array.from(scrollRef.current?.querySelectorAll('.sheet-tab') ?? [])

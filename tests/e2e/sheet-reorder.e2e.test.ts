@@ -65,6 +65,29 @@ describe('sheet reorder (drag)', () => {
     await page.close()
   })
 
+  test('a drag whose pointer leaves the strip still reorders (pointer capture)', async () => {
+    const page = await openApp()
+    await addSheets(page, 2) // Sheet1, Sheet2, Sheet3
+    const before = await names(page)
+    const from = await page.locator('.sheet-tab').nth(0).boundingBox()
+    const to = await page.locator('.sheet-tab').nth(2).boundingBox()
+    if (!from || !to) throw new Error('tab not found')
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+    await page.mouse.down()
+    // Drop far BELOW the strip (onto the grid) — with capture on the pressed tab,
+    // its handlers still receive the moves and reorder by clientX.
+    await page.mouse.move(from.x + from.width / 2, from.y + 120)
+    await page.mouse.move(to.x + to.width * 0.8, from.y + 120)
+    await page.mouse.up()
+    await page.waitForFunction(
+      (first) => (window as any).store.getState().sheets[0].name !== first,
+      before[0],
+    )
+    const after = await names(page)
+    expect(after[after.length - 1]).toBe(before[0])
+    await page.close()
+  })
+
   test('a plain click still switches sheets (drag logic does not swallow taps)', async () => {
     const page = await openApp()
     await addSheets(page, 2)

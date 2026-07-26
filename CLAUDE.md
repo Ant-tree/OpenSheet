@@ -214,7 +214,10 @@ off on the web, so web tests confirm no regressions there; native shells
   `SheetTabs.tsx` reorders live via Pointer Events (mouse + touch + pen in one
   path). Tabs carry `touch-action: none` so a horizontal drag reorders instead of
   scrolling the strip, while a tap still fires click → switch sheet (a `moved`
-  flag suppresses the post-drag click).
+  flag suppresses the post-drag click). **Pointer capture is taken on pointerdown**
+  (not on first move) so a real drag keeps getting events once the pointer leaves
+  the pressed tab or the DOM reorders under it — capturing late grabbed the wrong
+  element and the reorder silently failed in the browser.
 - Fix: **sheet rename now works on desktop/mobile apps.** It used `window.prompt`,
   which the Tauri and Android WebViews don't support (double-click did nothing).
   Replaced with an in-app modal (`RenameDialog`, styled like the Save-As dialog)
