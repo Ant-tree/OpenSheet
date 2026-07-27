@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useT, type MsgKey } from '../i18n'
+import { buildLabel } from '../lib/build'
 
 // ⌘ on macOS, Ctrl elsewhere (desktop + web). Mobile has no hardware keyboard,
 // but the panel is still readable there and harmless to show.
@@ -94,6 +95,9 @@ export default function ShortcutsHelp({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           ))}
+        </div>
+        <div className="shortcuts-foot">
+          <span className="build-tag">{t('buildLabel')}: {buildLabel()}</span>
         </div>
       </div>
     </div>

@@ -4,9 +4,19 @@ import App from './App'
 import { useStore } from './store/useStore'
 import { useSettingsStore } from './settings'
 import { initTheme } from './theme'
+import { buildLabel, BUILD_HASH, BUILD_TIME } from './lib/build'
 import './styles.css'
 
 initTheme()
+
+// Log the build stamp on boot so you can confirm (in the console) that a
+// browser/WebView is serving the latest bundle, not a cached older one. Also
+// exposed as window.OPENSHEET_BUILD for a quick check.
+console.info(`OpenSheet build ${buildLabel()}`)
+;(window as unknown as { OPENSHEET_BUILD: unknown }).OPENSHEET_BUILD = {
+  hash: BUILD_HASH,
+  time: BUILD_TIME,
+}
 
 // The app used to ship as a PWA (vite-plugin-pwa). That was removed — the app
 // runs online on the web and is bundled locally in the desktop/mobile shells, so

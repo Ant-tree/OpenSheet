@@ -189,6 +189,11 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Feature: **build stamp** — Vite `define` injects `__BUILD_HASH__` (short git
+  hash, `+` when the tree is dirty) + `__BUILD_TIME__`. Logged on boot
+  (`console.info` + `window.OPENSHEET_BUILD`) and shown in the F1 help-panel
+  footer, so you can confirm a device/browser is running the latest bundle rather
+  than a cached older one (`src/lib/build.ts`).
 - Fix: **clipboard now uses Excel-style quoted TSV** (`gridToTsv`/`tsvToGrid` in
   utils). A cell containing a newline/tab/quote is quoted so it stays one cell on
   paste instead of splitting across rows — which had also defeated the

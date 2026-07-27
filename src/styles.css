@@ -1204,6 +1204,16 @@ table.grid {
   padding: 8px 16px 16px;
   overflow-y: auto;
 }
+.shortcuts-foot {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+}
+.build-tag {
+  font-size: 11px;
+  color: var(--muted, #8a94a6);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  user-select: text;
+}
 .shortcuts-group {
   margin-top: 12px;
 }
