@@ -13,6 +13,7 @@ import type {
   Sparkline,
 } from '../types'
 import {
+  gridToTsv,
   iterateMultiSelection,
   iterateSelection,
   key,
@@ -20,6 +21,7 @@ import {
   selectionBounds,
   shiftFormulaRefs,
   shiftFormulaRowRefs,
+  tsvToGrid,
 } from '../lib/utils'
 import { detectLang, t } from '../i18n'
 import { displayValue } from '../lib/format'
@@ -341,7 +343,7 @@ export const useStore = create<StoreState>((set, get) => {
     setCellContent(row, col, raw) {
       pushUndo(set, get)
       const { hf, activeSheetId } = get()
-      const content = raw === '' ? null : raw
+      const content = raw === '' ? null : normalizeFormula(raw)
       hf.setCellContents({ sheet: activeSheetId, row, col }, content)
       bump(set)
     },
@@ -1255,7 +1257,7 @@ export const useStore = create<StoreState>((set, get) => {
           right: m.right - b.left,
         }))
       clipboard = { rows, formats, merges }
-      return rows.map((r) => r.join('\t')).join('\n')
+      return gridToTsv(rows)
     },
 
     cutSelection() {
@@ -1265,7 +1267,7 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     internalClipboardText() {
-      return clipboard ? clipboard.rows.map((r) => r.join('\t')).join('\n') : null
+      return clipboard ? gridToTsv(clipboard.rows) : null
     },
 
     fillRange(src, tgt) {
@@ -1478,14 +1480,14 @@ export const useStore = create<StoreState>((set, get) => {
 
     pasteText(text) {
       if (!text) return
-      const lines = text.replace(/\r\n?/g, '\n').split('\n')
-      if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
-      const cells = lines.map((line) => line.split('\t'))
-      const pastedTsv = cells.map((r) => r.join('\t')).join('\n')
-      const internal =
-        clipboard && clipboard.rows.map((r) => r.join('\t')).join('\n') === pastedTsv
-          ? clipboard
-          : null
+      const parsed = tsvToGrid(text)
+      // Use the internal clipboard (formats + merges) when the pasted text is our
+      // own copy. Matched on the parsed grid, ignoring trailing empty rows/cells
+      // (a copied block ending in blank/merge-covered cells serializes to a
+      // trailing newline that the parser drops). When matched, paste from the
+      // authoritative clipboard grid so dimensions/formats/merges line up exactly.
+      const internal = clipboard && gridsEquivalent(clipboard.rows, parsed) ? clipboard : null
+      const cells = internal ? internal.rows : parsed
 
       pushUndo(set, get)
       const { hf, activeSheetId } = get()
@@ -1519,13 +1521,8 @@ export const useStore = create<StoreState>((set, get) => {
 
     pasteValuesOnly(text) {
       let cells: string[][] | null = null
-      if (text) {
-        const lines = text.replace(/\r\n?/g, '\n').split('\n')
-        if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
-        cells = lines.map((l) => l.split('\t'))
-      } else if (clipboard) {
-        cells = clipboard.rows
-      }
+      if (text) cells = tsvToGrid(text)
+      else if (clipboard) cells = clipboard.rows
       if (!cells) return
       pushUndo(set, get)
       const { hf, activeSheetId } = get()
@@ -1630,6 +1627,45 @@ function updateSheet(
 
 function overlaps(a: MergeRange, b: MergeRange): boolean {
   return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom)
+}
+
+/**
+ * Normalize a formula's "smart"/curly quotes to straight ones. Mobile keyboards
+ * auto-correct ' and " to typographic quotes (' ' " "), which HyperFormula can't
+ * parse — so a sheet reference like ='6월'!E5 silently errored. Only applied to
+ * formulas (leading '='); plain text keeps whatever quotes the user typed.
+ */
+function normalizeFormula(raw: string): string {
+  if (!raw.startsWith('=')) return raw
+  return raw
+    .replace(/[‘’‚‛′]/g, "'")
+    .replace(/[“”„‟″]/g, '"')
+}
+
+/** Drop trailing empty cells from each row and trailing all-empty rows, so grids
+ *  that differ only by blank padding (e.g. a merge-covered last row that TSV
+ *  round-trips as a dropped trailing newline) compare equal. */
+function trimTrailingEmpty(g: string[][]): string[][] {
+  const rows = g.map((r) => {
+    let end = r.length
+    while (end > 0 && r[end - 1] === '') end--
+    return r.slice(0, end)
+  })
+  let n = rows.length
+  while (n > 0 && rows[n - 1].length === 0) n--
+  return rows.slice(0, n)
+}
+
+/** Grids equal up to trailing blank rows/cells (see trimTrailingEmpty). */
+function gridsEquivalent(a: string[][], b: string[][]): boolean {
+  const x = trimTrailingEmpty(a)
+  const y = trimTrailingEmpty(b)
+  if (x.length !== y.length) return false
+  for (let i = 0; i < x.length; i++) {
+    if (x[i].length !== y[i].length) return false
+    for (let j = 0; j < x[i].length; j++) if (x[i][j] !== y[i][j]) return false
+  }
+  return true
 }
 
 /** Merge the copied (relative) merges into `existing`, offset to the paste

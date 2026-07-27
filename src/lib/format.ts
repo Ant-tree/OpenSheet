@@ -143,6 +143,9 @@ export function formatNumber(value: number, token: string | undefined): string {
 
   const decimals = decimalsOf(core || section)
   let out = Math.abs(n).toFixed(decimals)
+  // Don't render a lonely minus for values that round to zero (e.g. -0 or a tiny
+  // negative floating-point residue like -1e-9 → "0", never "-0").
+  if (autoSign === '-' && parseFloat(out) === 0) autoSign = ''
   if (core.includes(',')) {
     const [intPart, fracPart] = out.split('.')
     const withSep = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')

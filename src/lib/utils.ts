@@ -113,6 +113,64 @@ export function shiftFormulaRowRefs(formula: string, delta: number): string {
   })
 }
 
+/**
+ * Serialize a grid of cell strings to clipboard TSV, Excel-style: a cell that
+ * contains a tab, newline, or double-quote is wrapped in double quotes with any
+ * inner quote doubled. Without this, a multi-line cell would split across rows on
+ * paste (and the internal-clipboard match would fail, dropping formats/merges).
+ */
+export function gridToTsv(rows: string[][]): string {
+  const cell = (v: string) =>
+    /[\t\n\r"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+  return rows.map((row) => row.map(cell).join('\t')).join('\n')
+}
+
+/** Parse clipboard TSV into a grid, honoring Excel-style quoted fields (which may
+ *  span tabs and newlines). A field is only quoted when it *starts* with `"`. */
+export function tsvToGrid(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let quoted = false
+  let i = 0
+  for (; i < text.length; i++) {
+    const ch = text[i]
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"'
+          i++
+        } else {
+          quoted = false
+        }
+      } else {
+        field += ch
+      }
+      continue
+    }
+    if (ch === '"' && field === '') {
+      quoted = true
+    } else if (ch === '\t') {
+      row.push(field)
+      field = ''
+    } else if (ch === '\n') {
+      row.push(field)
+      rows.push(row)
+      row = []
+      field = ''
+    } else if (ch !== '\r') {
+      field += ch
+    }
+  }
+  row.push(field)
+  rows.push(row)
+  // Drop a trailing empty row produced by a final newline.
+  if (rows.length > 1 && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === '') {
+    rows.pop()
+  }
+  return rows
+}
+
 /** Case-insensitive replace-all of `find` with `repl` in `str`. */
 export function replaceCaseInsensitive(str: string, find: string, repl: string): string {
   if (!find) return str

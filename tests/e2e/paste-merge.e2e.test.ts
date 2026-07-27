@@ -43,6 +43,33 @@ describe('copy/paste carries merged cells', () => {
     await page.close()
   })
 
+  test('a multi-line cell round-trips as one cell and keeps its merge + format', async () => {
+    const page = await openApp()
+    const result = await page.evaluate(() => {
+      const st = () => (window as any).store.getState()
+      // A cell whose text contains a newline (the case that used to split rows).
+      st().setCellContent(0, 0, '(주식계좌현금\n중 달러)')
+      st().setSelection({ anchor: { row: 0, col: 0 }, focus: { row: 1, col: 0 } })
+      st().applyFormat({ bold: true })
+      st().mergeSelection() // A1:A2 merged
+      st().setSelection({ anchor: { row: 0, col: 0 }, focus: { row: 1, col: 0 } })
+      const tsv = st().copySelection()
+      st().setSelection({ anchor: { row: 5, col: 0 }, focus: { row: 5, col: 0 } })
+      st().pasteText(tsv)
+      return {
+        a1: st().getComputed(5, 0),
+        fmt: st().getFormat(5, 0),
+        merges: st().activeSheet().merges,
+      }
+    })
+    // The newline stayed inside one cell (not split across rows)...
+    expect(result.a1).toBe('(주식계좌현금\n중 달러)')
+    // ...and because the grid matched, format + merge were applied.
+    expect(result.fmt).toMatchObject({ bold: true })
+    expect(result.merges).toContainEqual({ top: 5, left: 0, bottom: 6, right: 0 })
+    await page.close()
+  })
+
   test('paste formatting-only also carries the merge', async () => {
     const page = await openApp()
     const merges = await page.evaluate(() => {

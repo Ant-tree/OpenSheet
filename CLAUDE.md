@@ -189,6 +189,17 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Fix: **clipboard now uses Excel-style quoted TSV** (`gridToTsv`/`tsvToGrid` in
+  utils). A cell containing a newline/tab/quote is quoted so it stays one cell on
+  paste instead of splitting across rows — which had also defeated the
+  internal-clipboard match, so **merges + formats weren't applied** when pasting a
+  block with multi-line cells. Match is now trailing-empty-tolerant
+  (`gridsEquivalent`) and pastes from the authoritative internal grid.
+- Fix: **no more "-0"** — `formatNumber` drops the derived minus when the value
+  rounds to zero (−0 or a tiny negative float residue → "0").
+- Fix: **cross-sheet references typed on mobile** — smart/curly quotes
+  (' ' " ") are normalized to straight quotes for formulas (`normalizeFormula`
+  in `setCellContent`), so `='6월'!E5` resolves instead of erroring.
 - Feature: **drag-to-move a cell block** — grab the selection's outer border
   (thin `.move-edge` strips on the perimeter cells, mouse only, multi-cell
   selections) and drop it elsewhere; a dashed `.move-preview` shows the target.

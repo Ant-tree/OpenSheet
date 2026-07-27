@@ -13,6 +13,8 @@ import {
   colFromLetters,
   isInAnyRange,
   iterateMultiSelection,
+  gridToTsv,
+  tsvToGrid,
 } from '../../src/lib/utils'
 import type { Selection } from '../../src/types'
 
@@ -145,5 +147,25 @@ describe('replaceCaseInsensitive', () => {
   })
   test('empty find returns input unchanged', () => {
     expect(replaceCaseInsensitive('abc', '', 'x')).toBe('abc')
+  })
+})
+
+describe('clipboard TSV round-trip (Excel-style quoting)', () => {
+  test('plain grid needs no quoting', () => {
+    expect(gridToTsv([['a', 'b'], ['c', 'd']])).toBe('a\tb\nc\td')
+    expect(tsvToGrid('a\tb\nc\td')).toEqual([['a', 'b'], ['c', 'd']])
+  })
+  test('a cell with a newline stays one cell (quoted), not split across rows', () => {
+    const grid = [['top\nbottom', 'x'], ['y', 'z']]
+    const tsv = gridToTsv(grid)
+    expect(tsv).toContain('"top\nbottom"')
+    expect(tsvToGrid(tsv)).toEqual(grid) // survives the round-trip as one cell
+  })
+  test('tabs and quotes inside a cell are escaped/round-trip', () => {
+    const grid = [['a\tb', 'she said "hi"']]
+    expect(tsvToGrid(gridToTsv(grid))).toEqual(grid)
+  })
+  test('a trailing newline does not add an empty row', () => {
+    expect(tsvToGrid('a\tb\n')).toEqual([['a', 'b']])
   })
 })

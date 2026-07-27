@@ -29,6 +29,14 @@ describe('formatNumber — built-in presets (must not regress)', () => {
     expect(formatNumber(1234, 'General')).toBe('1234')
     expect(formatNumber(1234, undefined)).toBe('1234')
   })
+  test('values that round to zero never show a lonely minus (no "-0")', () => {
+    expect(formatNumber(-0, '₩#,##0')).toBe('₩0')
+    expect(formatNumber(-1e-9, '₩#,##0')).toBe('₩0')
+    expect(formatNumber(-0.004, '#,##0.00')).toBe('0.00')
+    expect(formatNumber(-0, '#,##0')).toBe('0')
+    // A value that genuinely rounds away from zero still keeps its sign.
+    expect(formatNumber(-0.6, '#,##0')).toBe('-1')
+  })
 })
 
 describe('formatNumber — custom literals', () => {
