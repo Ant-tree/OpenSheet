@@ -37,6 +37,16 @@ describe('formatNumber — built-in presets (must not regress)', () => {
     // A value that genuinely rounds away from zero still keeps its sign.
     expect(formatNumber(-0.6, '#,##0')).toBe('-1')
   })
+  test('an explicit negative section is not used for a value that rounds to zero', () => {
+    // Imported currency codes often carry a negative section with a literal "-".
+    expect(formatNumber(-1e-9, '₩#,##0;₩-#,##0')).toBe('₩0')
+    expect(formatNumber(-0.3, '₩#,##0;₩-#,##0')).toBe('₩0')
+    // A real negative still uses the negative section.
+    expect(formatNumber(-5, '₩#,##0;₩-#,##0')).toBe('₩-5')
+    // Percent near zero: uses ×100 precision, no "-0%".
+    expect(formatNumber(-0.0004, '0%')).toBe('0%')
+    expect(formatNumber(-0.02, '0%')).toBe('-2%')
+  })
 })
 
 describe('formatNumber — custom literals', () => {

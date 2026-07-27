@@ -86,14 +86,25 @@ export function formatNumber(value: number, token: string | undefined): string {
   // Excel codes have up to four sections: positive;negative;zero;text. Use the
   // negative/zero section when present (it carries its own sign), else derive
   // the sign ourselves from the positive section.
+  //
+  // Pick the section from the value ROUNDED to its display precision: a value
+  // that renders as zero (−0, or a tiny float residue like −1e-9) must use the
+  // zero/positive section — never the negative one — so it never shows "-0"
+  // (whether the minus is derived or a literal in an imported negative section).
   const parts = token.split(';')
+  const posSection = cleanFormatSection(parts[0])
+  const displayDecimals = decimalsOf(posSection)
+  let magnitude = Math.abs(value)
+  if (posSection.includes('%')) magnitude *= 100
+  const rounded = Number(magnitude.toFixed(Math.min(displayDecimals, 20)))
+  const eff = rounded === 0 ? 0 : value
   let section: string
   let autoSign = ''
-  if (value < 0 && parts.length > 1) section = parts[1]
-  else if (value === 0 && parts.length > 2) section = parts[2]
+  if (eff < 0 && parts.length > 1) section = parts[1]
+  else if (eff === 0 && parts.length > 2) section = parts[2]
   else {
     section = parts[0]
-    autoSign = value < 0 ? '-' : ''
+    autoSign = eff < 0 ? '-' : ''
   }
 
   const cleaned = cleanFormatSection(section)
