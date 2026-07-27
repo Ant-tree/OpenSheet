@@ -54,4 +54,20 @@ describe('zero never renders as "-0" in the grid', () => {
     expect(await cellText(page, 3, 0)).toBe('₩-5')
     await page.close()
   })
+
+  test('accounting format renders zero as the dash section, not ₩-0', async () => {
+    const page = await openApp()
+    await page.evaluate(() => {
+      const s = (window as any).store.getState()
+      // Excel's KRW accounting code: zero section is a dash literal, no digits.
+      const fmt = '_-₩* #,##0_-;-₩* #,##0_-;_-₩* "-"_-;_-@_-'
+      s.setSelection({ anchor: { row: 0, col: 0 }, focus: { row: 1, col: 0 } })
+      s.applyFormat({ numberFormat: fmt })
+      s.setCellContent(0, 0, '=47-47') // computes 0, like the user's =H47+H48
+      s.setCellContent(1, 0, '123456')
+    })
+    expect(await cellText(page, 0, 0)).toBe('₩-') // the dash, never "₩-0"
+    expect(await cellText(page, 1, 0)).toBe('₩123,456')
+    await page.close()
+  })
 })

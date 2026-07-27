@@ -149,6 +149,11 @@ export function formatNumber(value: number, token: string | undefined): string {
     }
   }
 
+  // A section with no digit placeholder (# or 0) renders only its literal text —
+  // e.g. an accounting zero section `_-₩* "-"_-` shows a dash, never a number. So
+  // a zero value must not get a "0" appended (which produced "₩-0").
+  if (!/[0#]/.test(core)) return `${prefix}${suffix}`
+
   let n = value
   if (isPercent) n = n * 100
 

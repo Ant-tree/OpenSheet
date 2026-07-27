@@ -37,6 +37,17 @@ describe('formatNumber — built-in presets (must not regress)', () => {
     // A value that genuinely rounds away from zero still keeps its sign.
     expect(formatNumber(-0.6, '#,##0')).toBe('-1')
   })
+  test('accounting format: zero renders the dash section, not "-0"', () => {
+    const ACCT = '_-₩* #,##0_-;-₩* #,##0_-;_-₩* "-"_-;_-@_-'
+    expect(formatNumber(0, ACCT)).toBe('₩-') // dash section, no trailing 0
+    expect(formatNumber(-0, ACCT)).toBe('₩-')
+    expect(formatNumber(0.3, ACCT)).toBe('₩-') // rounds to zero → dash
+    expect(formatNumber(1234, ACCT)).toBe('₩1,234')
+    expect(formatNumber(-1234, ACCT)).toBe('-₩1,234')
+  })
+  test('a literal-only format section prints just its text', () => {
+    expect(formatNumber(0, '"none"')).toBe('none')
+  })
   test('an explicit negative section is not used for a value that rounds to zero', () => {
     // Imported currency codes often carry a negative section with a literal "-".
     expect(formatNumber(-1e-9, '₩#,##0;₩-#,##0')).toBe('₩0')

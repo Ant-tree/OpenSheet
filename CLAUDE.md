@@ -201,7 +201,11 @@ off on the web, so web tests confirm no regressions there; native shells
   block with multi-line cells. Match is now trailing-empty-tolerant
   (`gridsEquivalent`) and pastes from the authoritative internal grid.
 - Fix: **no more "-0"** — `formatNumber` drops the derived minus when the value
-  rounds to zero (−0 or a tiny negative float residue → "0").
+  rounds to zero (−0 or a tiny negative float residue → "0"), picks the section
+  by the *rounded* value (so an imported negative section isn't used for a
+  zero), and — the real culprit — renders a **section with no digit placeholder
+  as its literal text only**. An accounting zero section (`_-₩* "-"_-`) is just a
+  dash; the old code appended a "0" → "₩-0". Now zero shows the dash ("₩-").
 - Fix: **cross-sheet references typed on mobile** — smart/curly quotes
   (' ' " ") are normalized to straight quotes for formulas (`normalizeFormula`
   in `setCellContent`), so `='6월'!E5` resolves instead of erroring.
