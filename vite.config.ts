@@ -7,7 +7,11 @@ import { execSync } from 'node:child_process'
 function gitHash(): string {
   try {
     const hash = execSync('git rev-parse --short HEAD').toString().trim()
-    const dirty = execSync('git status --porcelain').toString().trim() ? '+' : ''
+    // Ignore untracked files (build artifacts like *.tsbuildinfo, dist/) so a
+    // clean commit doesn't get flagged dirty — only tracked edits add the "+".
+    const dirty = execSync('git status --porcelain --untracked-files=no').toString().trim()
+      ? '+'
+      : ''
     return hash + dirty
   } catch {
     return 'unknown'
