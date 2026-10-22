@@ -189,6 +189,14 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Fix: **xlsx export wrote numbers as text** — `buildWorkbook` set
+  `cell.value = hf.getCellSerialized(...)`, but HyperFormula's serialized content
+  is ALWAYS a string (`"7200000"` for a numeric cell), so exceljs emitted a text
+  cell (`t="s"`). The round-trip back INTO OpenSheet hid it (import re-parses the
+  string to a number), but Excel/Sheets/Dropbox showed the cells as plain text and
+  excluded them from formulas. Now writes the computed value when it's a number or
+  boolean (numbers stay numeric, checkboxes still TRUE/FALSE); genuine text falls
+  back to the serialized string. Regression: `tests/e2e/export-numeric.e2e.test.ts`.
 - Feature: **build stamp** — Vite `define` injects `__BUILD_HASH__` (short git
   hash, `+` when the tree is dirty) + `__BUILD_TIME__`. Logged on boot
   (`console.info` + `window.OPENSHEET_BUILD`) and shown in the F1 help-panel

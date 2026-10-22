@@ -919,9 +919,15 @@ export function buildWorkbook(
         } else if (format === 'csv') {
           cell.value = toCsvValue(computed)
         } else if (serialized !== null && serialized !== undefined && serialized !== '') {
-          // Booleans (e.g. checkbox cells stored as TRUE/FALSE) export as real
-          // booleans, not the literal text, so they round-trip as TRUE/FALSE.
-          cell.value = (typeof computed === 'boolean' ? computed : serialized) as ExcelJS.CellValue
+          // HyperFormula's serialized content is ALWAYS a string (e.g. "7200000"
+          // for a numeric cell), so writing it verbatim makes exceljs emit a text
+          // cell (t="s") — Excel/Sheets then show it as plain text and exclude it
+          // from formulas. Write the computed value instead when it's a number or
+          // boolean so numbers stay numeric (and checkboxes round-trip as
+          // TRUE/FALSE); genuine text falls back to the serialized string.
+          cell.value = (
+            typeof computed === 'number' || typeof computed === 'boolean' ? computed : serialized
+          ) as ExcelJS.CellValue
         }
 
         if (format === 'xlsx' && fmt) applyFormatToCell(cell, fmt)
