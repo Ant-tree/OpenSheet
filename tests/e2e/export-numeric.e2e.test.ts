@@ -65,6 +65,24 @@ describe('xlsx export cell types', () => {
     await page.close()
   })
 
+  test('a date (serial + date format) exports as a date cell, not text', async () => {
+    // A date is a serial number carrying a date number-format. The same
+    // serialized-string bug exported it as text (t="s"), so Excel ignored the
+    // format and showed the raw serial. It must stay numeric so the date format
+    // applies — exceljs reads such a cell back as a real Date.
+    const page = await openApp()
+    await page.evaluate(() => {
+      const s = (window as any).store.getState()
+      s.setSelection({ anchor: { row: 0, col: 0 }, focus: { row: 0, col: 0 } })
+      s.setCellContent(0, 0, '46037') // 2026-01-15 as an Excel serial
+      s.applyFormat({ numberFormat: 'm"월" d"일"' })
+    })
+    const cell = await exportFirstCell(page)
+    expect(cell.type).toBe(ExcelJS.ValueType.Date)
+    expect(cell.numFmt).toBe('m"월" d"일"')
+    await page.close()
+  })
+
   test('genuine text still exports as a string cell', async () => {
     const page = await openApp()
     await page.evaluate(() => {

@@ -196,7 +196,10 @@ off on the web, so web tests confirm no regressions there; native shells
   string to a number), but Excel/Sheets/Dropbox showed the cells as plain text and
   excluded them from formulas. Now writes the computed value when it's a number or
   boolean (numbers stay numeric, checkboxes still TRUE/FALSE); genuine text falls
-  back to the serialized string. Regression: `tests/e2e/export-numeric.e2e.test.ts`.
+  back to the serialized string. This also fixes **dates** (a serial number + a
+  date format like `m"월" d"일"`): they were exported as text so Excel ignored the
+  format and showed the raw serial; now they stay numeric and render as dates.
+  Regression: `tests/e2e/export-numeric.e2e.test.ts`.
 - Feature: **build stamp** — Vite `define` injects `__BUILD_HASH__` (short git
   hash, `+` when the tree is dirty) + `__BUILD_TIME__`. Logged on boot
   (`console.info` + `window.OPENSHEET_BUILD`) and shown in the F1 help-panel

@@ -1,4 +1,5 @@
 git pull origin main
+npm install
 npm run build
 npm run cap:ios
 npm run cap:android
