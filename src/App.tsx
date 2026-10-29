@@ -10,9 +10,11 @@ import ChartPanel from './components/ChartPanel'
 import DataValidationPanel from './components/DataValidationPanel'
 import ShortcutsHelp from './components/ShortcutsHelp'
 import Toast from './components/Toast'
+import { hasRenderCrashed } from './components/ErrorBoundary'
 import { useStore } from './store/useStore'
 import { addRecentFile, clearCachedDoc } from './lib/recentFiles'
 import { iterateMultiSelection } from './lib/utils'
+import { showToast } from './lib/toast'
 import {
   exportWorkbook,
   saveToHandle,
@@ -26,6 +28,32 @@ import { t as translate, useLangStore, useT } from './i18n'
 import { useThemeStore, type Theme } from './theme'
 import { useZoomStore, MIN_ZOOM, MAX_ZOOM } from './zoom'
 import { useSettingsStore } from './settings'
+
+/** localStorage key holding the desktop file path whose launch reopen has not
+ *  finished yet. */
+const REOPEN_PENDING_KEY = 'opensheet.reopenPending'
+/** How long after loading the reopened file to wait before treating it as shown. */
+const REOPEN_CONFIRM_DELAY_MS = 1000
+/** The launch reopen runs once per page load, even when StrictMode runs the
+ *  launch effect twice in development. */
+let launchReopenHandled = false
+
+function readReopenPending(): string | null {
+  try {
+    return localStorage.getItem(REOPEN_PENDING_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeReopenPending(path: string | null): void {
+  try {
+    if (path) localStorage.setItem(REOPEN_PENDING_KEY, path)
+    else localStorage.removeItem(REOPEN_PENDING_KEY)
+  } catch {
+    // Storage unavailable: the reopen still works, just without this guard.
+  }
+}
 
 export default function App() {
   const t = useT()
@@ -232,17 +260,33 @@ export default function App() {
     // The desktop app reopens the last file FRESH from disk (so external edits
     // show up). Everywhere else we start blank and let the user open the file
     // directly — the app no longer caches/auto-restores the working document.
+    // A reopen that was still pending at launch never finished last time (the
+    // app crashed or hung while opening it), so skip it instead of failing the
+    // same way on every launch.
     const startPath = useStore.getState().filePath
-    if (isTauri() && startPath) {
-      readWorkbookFromPath(startPath)
-        .then((wb) => {
-          if (wb) {
-            const s = useStore.getState()
-            s.loadWorkbook(wb.sheets, wb.fileName)
-            s.setFilePath(startPath)
-          }
-        })
-        .catch(() => {})
+    if (isTauri() && startPath && !launchReopenHandled) {
+      launchReopenHandled = true
+      if (readReopenPending() === startPath) {
+        writeReopenPending(null)
+        useStore.getState().setFilePath(null)
+        showToast(translate('reopenSkipped', useLangStore.getState().lang))
+      } else {
+        writeReopenPending(startPath)
+        readWorkbookFromPath(startPath)
+          .then((wb) => {
+            if (wb) {
+              const s = useStore.getState()
+              s.loadWorkbook(wb.sheets, wb.fileName)
+              s.setFilePath(startPath)
+            }
+            // Clear the marker only once the loaded document has rendered
+            // without crashing; otherwise the next launch skips this file.
+            setTimeout(() => {
+              if (!hasRenderCrashed()) writeReopenPending(null)
+            }, REOPEN_CONFIRM_DELAY_MS)
+          })
+          .catch(() => writeReopenPending(null))
+      }
     }
     // Purge any leftover document cache from earlier versions.
     void clearCachedDoc()

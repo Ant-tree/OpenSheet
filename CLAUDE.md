@@ -189,6 +189,18 @@ off on the web, so web tests confirm no regressions there; native shells
 
 ## Session changelog (features + fixes, newest first)
 
+- Fix: **startup errors no longer leave a blank window** (reported on the macOS
+  app, where release builds have no dev tools). `public/boot-guard.js` is a
+  classic script loaded before the bundle: if the bundle fails to load or
+  evaluate and `#root` stays empty, it shows the error text + user agent and a
+  "start with a blank document" button (its en/ko strings live in the script,
+  since `i18n.ts` is in the bundle that failed). Render errors are caught by
+  `components/ErrorBoundary.tsx` (error, component stack, build stamp). The
+  desktop launch reopen sets `opensheet.reopenPending` and clears it only after
+  the file rendered without a crash; if it is still set on the next launch, the
+  reopen is skipped (toast) so a file that crashes rendering can't brick every
+  launch. The reopen runs once per page load (StrictMode runs effects twice in
+  dev). Regression: `tests/e2e/startup-error.e2e.test.ts`.
 - Fix: **xlsx export wrote numbers as text** — `buildWorkbook` set
   `cell.value = hf.getCellSerialized(...)`, but HyperFormula's serialized content
   is ALWAYS a string (`"7200000"` for a numeric cell), so exceljs emitted a text

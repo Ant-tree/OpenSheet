@@ -1546,3 +1546,48 @@ table.grid {
   border: none;
   background: transparent;
 }
+
+/* Render-error screen (ErrorBoundary) shown instead of a blank window. */
+.crash-screen {
+  max-width: 760px;
+  margin: 48px auto;
+  padding: 0 24px;
+  color: var(--fg);
+  font-family: var(--font);
+}
+.crash-screen h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+.crash-screen p {
+  margin: 0 0 16px;
+  color: var(--header-fg);
+}
+.crash-details {
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  background: var(--header-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  max-height: 50vh;
+  overflow: auto;
+}
+.crash-actions button {
+  margin-right: 8px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--menu-bg);
+  color: var(--fg);
+  font-size: 14px;
+  cursor: pointer;
+}
+.crash-actions .crash-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

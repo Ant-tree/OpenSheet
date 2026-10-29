@@ -219,6 +219,11 @@ const dict = {
     fmtCurrencyUsd: 'Currency ($)',
     fmtCurrencyKrw: 'Currency (₩)',
     fmtDate: 'Date (2024-01-31)',
+    crashTitle: 'Something went wrong',
+    crashBody: 'OpenSheet hit an error and could not show the document. Please send the details below to the developer.',
+    crashStartBlank: 'Start with a blank document',
+    crashReload: 'Reload',
+    reopenSkipped: 'The last file was not reopened because it failed to open last time.',
   },
   ko: {
     open: '열기',
@@ -423,6 +428,11 @@ const dict = {
     fmtCurrencyUsd: '통화 ($)',
     fmtCurrencyKrw: '통화 (₩)',
     fmtDate: '날짜 (2024-01-31)',
+    crashTitle: '문제가 발생했습니다',
+    crashBody: '오류가 발생해 문서를 표시하지 못했습니다. 아래 내용을 개발자에게 전달해 주세요.',
+    crashStartBlank: '빈 문서로 시작',
+    crashReload: '다시 불러오기',
+    reopenSkipped: '지난번에 마지막 파일을 여는 중 문제가 생겨, 이번에는 다시 열지 않았습니다.',
   },
 } as const
 
