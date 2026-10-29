@@ -194,7 +194,11 @@ off on the web, so web tests confirm no regressions there; native shells
   classic script loaded before the bundle: if the bundle fails to load or
   evaluate and `#root` stays empty, it shows the error text + user agent and a
   "start with a blank document" button (its en/ko strings live in the script,
-  since `i18n.ts` is in the bundle that failed). Render errors are caught by
+  since `i18n.ts` is in the bundle that failed). If nothing rendered after 8s
+  and no error fired, it says so too (and lists the loaded scripts); it removes
+  itself if the app renders late. To read the console in a release build, build
+  with the opt-in Cargo feature: `npm run tauri build -- --features devtools`
+  (right-click > Inspect Element). Render errors are caught by
   `components/ErrorBoundary.tsx` (error, component stack, build stamp). The
   desktop launch reopen sets `opensheet.reopenPending` and clears it only after
   the file rendered without a crash; if it is still set on the next launch, the

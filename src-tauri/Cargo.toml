@@ -14,6 +14,11 @@ rust-version = "1.77.2"
 name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Opt-in Web Inspector for release builds, to read the console on a machine where
+# the app misbehaves: `npm run tauri build -- --features devtools`.
+devtools = ["tauri/devtools"]
+
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 

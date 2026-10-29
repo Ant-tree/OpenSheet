@@ -12,6 +12,7 @@
   var FILE_PATH_KEY = 'opensheet.filePath'
   var LANG_KEY = 'opensheet.lang'
   var CHECK_DELAY_MS = 1500
+  var NO_RENDER_DELAY_MS = 8000
 
   var messages = {
     en: {
@@ -106,6 +107,14 @@
     box.appendChild(startBlank)
     box.appendChild(reload)
     document.body.appendChild(box)
+
+    // A slow start that renders after all: get out of the app's way.
+    var watch = setInterval(function () {
+      if (!appRendered()) return
+      clearInterval(watch)
+      box.remove()
+      style.remove()
+    }, 500)
   }
 
   // React renders asynchronously after the bundle runs, so give it a moment
@@ -132,4 +141,22 @@
   window.addEventListener('unhandledrejection', function (event) {
     record('Unhandled rejection: ' + describe(event.reason))
   })
+
+  // The app can also stall without raising anything (a module that never
+  // finishes loading, a hung promise before the first render). Say so, so a
+  // blank window is never ambiguous.
+  setTimeout(function () {
+    if (appRendered() || errors.length > 0) return
+    errors.push(
+      'No error was reported, but the app did not render within ' +
+        NO_RENDER_DELAY_MS / 1000 +
+        ' seconds. Loaded scripts: ' +
+        Array.prototype.map
+          .call(document.scripts, function (s) {
+            return s.src || '(inline)'
+          })
+          .join(', '),
+    )
+    render()
+  }, NO_RENDER_DELAY_MS)
 })()

@@ -102,6 +102,18 @@ describe('startup errors are shown instead of a blank window', () => {
     await page.close()
   })
 
+  test('an app that never renders, without any error, still shows the boot screen', async () => {
+    const page = await browser.newPage()
+    await page.route('**/src/main.tsx', (route) =>
+      route.fulfill({ contentType: 'application/javascript', body: 'export {}' }),
+    )
+    await page.goto(baseURL)
+    const box = page.locator('#boot-error')
+    await box.waitFor({ timeout: 15000 })
+    expect(await box.textContent()).toContain('did not render')
+    await page.close()
+  })
+
   test('a render error shows the in-app error screen, not the boot screen', async () => {
     const page = await browser.newPage()
     await crashSheetTabs(page, ALWAYS_CRASH)
