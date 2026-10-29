@@ -166,6 +166,17 @@ Legend: ✅ supported · ❌ not supported (feature/menu item absent).
     `preventDefault()` there is ignored and the resize loses to the scroll.
     Element-level + mount-time + `{passive:false}` is honoured. Headers carry
     `data-col`/`data-row` for the listener to read the index.
+12. **A blank macOS window with no error can be the OS, not the app.** On macOS
+    26, WebKit asks AuthKit (`akd`) whether an SSO extension should take over a
+    navigation before it loads the page (`SOAuthorizationCoordinator::tryAuthorize`
+    -> "Fetching native takeover URLs"). A wedged `akd` never answers, so the
+    first navigation never starts: pure white window, WebContent stuck at ~6 MB,
+    `boot-guard.js` never runs, no crash, same Tauri/wry as builds that worked.
+    Seen on an Intel iMac (macOS 26.6.2) whose `akd` had piled up
+    `fetch-attestation` transactions for 18 days. Diagnose with
+    `log show --last 1m --style compact --predicate 'process == "app"' | sed -n '/decidePolicyForNavigationAction/,$p'`
+    (look for `tryAuthorize` with nothing after it). Fix: `kill -9` the stale
+    `akd` (`killall akd` alone did not end it) or reboot.
 
 ## Testing approach used here
 
